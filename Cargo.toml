@@ -1,0 +1,92 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  워크스페이스 루트 매니페스트
+#
+#  이 파일에는 [package] 가 없다. 이런 걸 "virtual manifest" 라고 하며,
+#  루트 자체는 크레이트가 아니고 **여러 크레이트를 묶는 껍데기**라는 뜻이다.
+#  C 로 치면 서브디렉터리를 순회하는 최상위 Makefile 에 가깝다.
+#
+#  워크스페이스로 묶으면 얻는 것:
+#   - target/ 디렉터리 하나를 공유한다 (같은 의존성을 세 번 빌드하지 않는다)
+#   - Cargo.lock 하나로 모든 크레이트의 의존성 버전이 일치한다
+#   - `cargo test --workspace` 한 번으로 전부 검사한다
+#   - 버전·라이선스·lint 규칙을 여기 한 곳에서 정하고 각 크레이트가 물려받는다
+# ═══════════════════════════════════════════════════════════════════════════
+
+[workspace]
+# resolver 3 = edition 2024 의 기능 해석기(feature resolver).
+# 의존성이 요구하는 feature 를 어떻게 합칠지 정하는 규칙 버전이다.
+# 2 이하는 빌드 전용 의존성의 feature 가 실행 코드로 새어 들어오는 문제가 있었다.
+resolver = "3"
+
+# 이 목록에 있는 디렉터리만 워크스페이스 멤버다.
+# 새 크레이트를 만들면 여기에 반드시 추가해야 한다 - 빠뜨리면
+# "current package believes it's in a workspace when it's not" 에러가 난다.
+members = ["rsm-core", "rsm-modules", "rsm-cli"]
+# Phase 2 이후 추가: rsm-ml, rsm-mcap, rsm-sys
+# Phase 3 이후 추가: rsm-ros2
+
+# ── 모든 멤버가 물려받는 패키지 메타데이터 ──────────────────────────────────
+# 각 크레이트의 Cargo.toml 에서 `version.workspace = true` 라고 쓰면
+# 여기 값을 가져간다. 버전을 올릴 때 파일 한 곳만 고치면 된다.
+[workspace.package]
+version = "0.1.0"
+edition = "2024"               # 언어 판(edition). 2015/2018/2021/2024 - 문법 세대 구분
+rust-version = "1.95"          # MSRV(최소 지원 컴파일러). 이보다 낮으면 빌드 거부
+license = "Apache-2.0"
+repository = "https://github.com/OWNER/robot-safety-monitor"   # TODO: 공개 시 확정
+authors = ["SeongYong Park"]
+
+# ── 의존성 버전을 여기 한 곳에 모은다 ───────────────────────────────────────
+# 각 크레이트는 `serde = { workspace = true }` 라고만 쓴다.
+# 세 크레이트가 서로 다른 serde 버전을 쓰는 사고를 구조적으로 막는다.
+#
+# "1" 은 semver 범위 표기다. `^1.0.0` 과 같은 뜻이고 1.x 전부를 허용한다.
+# 실제로 어느 버전이 쓰였는지는 Cargo.lock 이 고정한다.
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }  # 직렬화/역직렬화. derive 로 매크로 사용
+serde_json = "1"                                  # JSONL 출력 (rsm-cli)
+serde_yaml_ng = "0.10"                            # YAML 설정 파싱 (TECH_STACK T3)
+rtrb = "0.3"                                      # wait-free SPSC 링버퍼 (TECH_STACK T5)
+thiserror = "2"                                   # 에러 타입 derive (라이브러리용)
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  코딩 규칙 (TECH_STACK T10 / PRD D18)
+#
+#  "문서에 적힌 규칙"이 아니라 "빌드를 실패시키는 규칙"이다. CI 는
+#  `cargo clippy --workspace --all-targets -- -D warnings` 로 돌리므로
+#  아래에서 warn 인 것도 CI 에서는 에러가 된다.
+#
+#  NOTE: unsafe 격리가 필요한 크레이트(rsm-sys)는 `[lints] workspace = true`
+#        를 쓰지 않고 자체 lints 블록을 둔다. forbid 는 하위에서 되돌릴 수 없기
+#        때문이다 (allow(unsafe_code) 를 써도 컴파일 에러).
+# ═══════════════════════════════════════════════════════════════════════════
+[workspace.lints.rust]
+# forbid = deny 보다 강하다. 코드 안에서 #[allow(...)] 로 예외를 만들 수 없다.
+# 코어에 unsafe 가 한 줄도 없다는 것을 컴파일러가 보증한다 (PRD R-21).
+unsafe_code = "forbid"
+
+# 공개 항목에 문서 주석(///)이 없으면 경고. 공개 API 가 설명 없이 늘어나는 걸 막는다.
+missing_docs = "warn"
+
+# 구식 관용구(elided lifetime 누락 등)를 경고하는 lint **그룹**.
+# 그룹에는 priority = -1 을 줘야 한다. 그러지 않으면 아래 개별 lint 설정을
+# 그룹이 덮어써서 "lint_groups_priority" 경고가 난다.
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+# clippy 는 rustc 보다 훨씬 많은 lint 를 갖는다. 그룹 단위로 켜고 개별로 끈다.
+all = { level = "deny", priority = -1 }        # 기본 그룹 - 거의 항상 진짜 문제다
+pedantic = { level = "warn", priority = -1 }   # 깐깐한 그룹 - 취향 문제도 섞여 있다
+
+# ── 패닉 경로 차단 (PRD R-18) ──────────────────────────────────────────────
+# 라이브러리가 마음대로 프로세스를 죽이면 안 된다. 실패는 Result 로 돌려주고
+# 판단은 호출자가 한다. 테스트 모듈에서는 #[allow(...)] 로 완화한다.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+# ── pedantic 중 초기 개발에 노이즈가 큰 항목만 완화 - 필요해지면 다시 켠다 ──
+must_use_candidate = "allow"        # #[must_use] 를 붙이라는 제안. 양이 너무 많다
+module_name_repetitions = "allow"   # signal::SignalBus 같은 이름을 문제 삼는다
+# 문서가 한국어라 PRD/TECH_STACK/ROS 같은 약어마다 백틱을 요구해 노이즈가 큼
+doc_markdown = "allow"

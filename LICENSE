@@ -1,0 +1,10 @@
+PLACEHOLDER — 이 파일을 Apache License 2.0 정본으로 교체할 것.
+
+  PowerShell:
+    Invoke-WebRequest https://www.apache.org/licenses/LICENSE-2.0.txt -OutFile LICENSE
+
+  또는 브라우저로 https://www.apache.org/licenses/LICENSE-2.0.txt 를 열어
+  전문을 그대로 저장.
+
+저장소를 공개(PRD D17, v0.5 시점)하기 전에 반드시 끝내야 하는 항목이다.
+Cargo.toml 의 license = "Apache-2.0" 과 각 소스의 라이선스 표시는 이미 맞춰져 있다.

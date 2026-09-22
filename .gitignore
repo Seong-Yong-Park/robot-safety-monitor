@@ -1,0 +1,15 @@
+/target
+**/*.rs.bk
+*.pdb
+.DS_Store
+
+# 모델 가중치는 저장소에 두지 않는다 (TECH_STACK T11, 라이선스 전염 회피)
+/models/
+*.onnx
+
+# 개인 작업 메모 — 일정·사업화·학습 진행 상황은 공개 저장소에 두지 않는다
+/private/
+
+# 세션 산출물·임시 보관
+/Claude outputs/
+/_to_delete/

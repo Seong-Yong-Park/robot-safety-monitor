@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  # 잡 1 — 코어 검사 (매 푸시). rsm-ros2 는 ROS 환경이 필요하므로 제외한다.
+  check:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: rustup show           # rust-toolchain.toml 을 따른다
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --exclude rsm-ros2 -- -D warnings
+      - name: Test
+        run: cargo test --workspace --exclude rsm-ros2
+
+  # 잡 1b — aarch64 이식성 (PRD D16). rsm-ml 은 C++ ONNX Runtime 링크 때문에 제외.
+  # 공개 저장소라면 ARM 네이티브 러너를 쓸 수 있다. 사용 불가 시 `cross` 로 전환.
+  aarch64:
+    name: aarch64 (linux)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets --exclude rsm-ros2 --exclude rsm-ml -- -D warnings
+      - run: cargo test --workspace --exclude rsm-ros2 --exclude rsm-ml
+
+  # 잡 2 — 의존성 정책 (라이선스·금지 크레이트·취약점·출처)
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
+  # 잡 3 — 커버리지. 대상 코드가 쌓이면 활성화한다.
+  # coverage:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - run: rustup show
+  #     - uses: taiki-e/install-action@cargo-llvm-cov
+  #     - run: cargo llvm-cov --workspace --exclude rsm-ros2 --lcov --output-path lcov.info

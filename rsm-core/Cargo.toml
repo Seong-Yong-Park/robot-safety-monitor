@@ -1,0 +1,28 @@
+# 워크스페이스 멤버의 매니페스트.
+# `.workspace = true` 는 "루트 Cargo.toml 의 [workspace.package] 값을 쓰겠다"는
+# 뜻이다. 버전·라이선스·판을 크레이트마다 따로 적지 않는다.
+[package]
+name = "rsm-core"
+description = "Robot Safety Monitor — middleware-independent core (traits, types, scheduler, registry)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# 버전은 루트의 [workspace.dependencies] 에 있다. 여기서는 "이 크레이트가
+# 그중 무엇을 쓰는지"만 고른다. 이 목록이 짧을수록 코어가 가볍다는 뜻이고,
+# 여기에 ROS 2 나 특정 미들웨어가 등장하면 설계 위반이다 (PRD D1).
+[dependencies]
+serde = { workspace = true }          # 설정 구조체 역직렬화
+thiserror = { workspace = true }      # ConfigError 정의
+serde_yaml_ng = { workspace = true }  # YAML 파싱 + Params 의 Value 타입
+serde_json = { workspace = true }     # (Phase 1 리플레이 대비)
+rtrb = { workspace = true }           # 그룹 → Arbiter SPSC 큐
+
+# 루트의 [workspace.lints] 를 그대로 적용한다.
+# 이 두 줄이 없으면 forbid(unsafe_code) 도 clippy 규칙도 이 크레이트에는
+# 걸리지 않는다. 새 크레이트를 만들 때 빠뜨리기 쉬운 곳.
+[lints]
+workspace = true

@@ -1,0 +1,26 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  clippy 의 "설정이 필요한 lint" 만 여기에 적는다.
+#
+#  lint 를 켜고 끄는 것(deny/warn/allow)은 Cargo.toml 의 [workspace.lints] 에
+#  있다. 이 파일은 **lint 에 넘길 값**을 담는다. 예: "어떤 함수를 금지할지".
+#
+#  적용 범위는 워크스페이스 전체다. 크레이트별로 다르게 하려면 각 크레이트
+#  디렉터리에 clippy.toml 을 따로 둔다.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── 코어는 OS 시계를 직접 호출하지 않는다 (PRD D11 / TECH_STACK T6) ─────────
+#
+# 왜: 시각의 출처가 코드 안에 박혀 있으면 (1) 리플레이로 같은 결과를 재현할 수
+# 없고 (2) 테스트가 실제 시간에 묶여 CI 에서 흔들린다. 그래서 Clock 트레이트를
+# 주입받고, 구현체만 진짜 시계를 안다.
+#
+# 이 규칙을 문서로만 적으면 언젠가 누가 Instant::now() 를 쓴다. 린트로 막으면
+# 그 순간 빌드가 실패한다 - 규칙을 기계가 지킨다.
+#
+# 유일한 예외는 rsm-core::time::MonotonicClock 내부이며, 그곳에서만
+# #[allow(clippy::disallowed_methods, reason = "...")] 로 명시적으로 허용한다.
+# 즉 코어 전체에서 OS 시계를 읽는 곳은 문법적으로 딱 한 군데다.
+disallowed-methods = [
+  { path = "std::time::Instant::now", reason = "inject the Clock trait instead" },
+  { path = "std::time::SystemTime::now", reason = "wall-clock time must not drive judgements (it can jump backwards)" },
+]

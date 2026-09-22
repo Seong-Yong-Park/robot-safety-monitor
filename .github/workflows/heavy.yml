@@ -1,0 +1,27 @@
+# 잡 4 — 무거운 검사. 주 1회 또는 수동 실행 (TECH_STACK T9/T15).
+# unsafe 코드(rsm-sys)와 동시성 코드가 생긴 뒤에 활성화한다.
+name: heavy
+
+on:
+  schedule:
+    - cron: "0 18 * * 0"   # 일요일 03:00 KST
+  workflow_dispatch:
+
+jobs:
+  miri:
+    name: miri (UB 검출)
+    runs-on: ubuntu-latest
+    if: false               # TODO: rsm-sys 가 생기면 true 로
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install nightly --component miri
+      - run: cargo +nightly miri test -p rsm-sys
+
+  loom:
+    name: loom (인터리빙 탐색)
+    runs-on: ubuntu-latest
+    if: false               # TODO: 그룹 간 큐 연동 후 true 로
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - run: cargo test -p rsm-core --features loom --release

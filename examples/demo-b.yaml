@@ -1,0 +1,69 @@
+# demo-b — 이동로봇(AMR) 구성 + 고장 시연.
+#
+# demo-a 와 같은 바이너리를 쓴다. 그룹이 하나뿐이고, 모듈 종류도 다르며,
+# 일부러 두 가지 고장을 심어 뒀다.
+#
+#   1) wheel_encoder 가 100 tick 뒤 갱신을 멈춘다 → comm_timeout 이 발화한다.
+#      "입력이 조용한 것"은 "위험이 없는 것"이 아니다 (R-16).
+#   2) crash_probe 가 50 tick 째에 패닉한다 → 그 모듈만 Faulted 로 빠지고
+#      나머지는 계속 돈다. Supervisor 가 Degraded 로 알린다 (R-18).
+#
+#   rsm run --config examples/demo-b.yaml --duration-ms 3000
+version: 1
+
+groups:
+  normal:
+    period_hz: 100
+    queue_capacity: 64
+
+modules:
+  - name: wheel_encoder     # 100 tick(=1초) 뒤 침묵한다
+    type: stalling
+    group: normal
+    params:
+      signal: base.wheel_speed
+      value: 0.8
+      stall_after: 100
+
+  - name: encoder_link      # 침묵을 감지하는 쪽
+    type: comm_timeout
+    group: normal
+    params:
+      signal: base.wheel_speed
+      timeout_ms: 200
+      hazard: internal.comm_timeout
+      severity: critical
+      ttl_ms: 500
+
+  # 주의: 버스는 마지막 값을 지우지 않는다. 그래서 encoder 가 멈춰도 speed_limit
+  # 은 옛날 0.8 을 계속 보고 WARNING 을 낸다. 이것이 정상이다 — 값의 신선도를
+  # 판정하는 책임은 comm_timeout 한 곳에 모아 두었고, Arbiter 는 그쪽의
+  # CRITICAL 이 이기게 한다. 감지기마다 스테일 판정을 흩어 놓지 않는다.
+  - name: speed_limit       # 값이 오는 동안은 과속을 본다
+    type: threshold
+    group: normal
+    params:
+      signal: base.wheel_speed
+      limit: 0.5
+      direction: above
+      hazard: internal.base.speed_limit
+      severity: warning
+      ttl_ms: 200
+
+  - name: crash_probe       # 일부러 패닉한다. 배포용 설정에는 넣지 말 것.
+    type: panic_probe
+    group: normal
+    params:
+      after_ticks: 50
+
+arbiter:
+  period_hz: 20
+
+supervisor:
+  period_hz: 10
+  group_stale_after_ms: 500
+
+sink:
+  format: jsonl
+  path: "-"
+  on_change_only: false     # 매 주기 하트비트. 끊기면 감시기가 죽은 것이다.

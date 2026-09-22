@@ -1,0 +1,25 @@
+[package]
+name = "rsm-modules"
+description = "Robot Safety Monitor — reference hazard detection modules (R-09)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# path 의존성 = 같은 워크스페이스 안의 다른 크레이트.
+# 화살표는 modules → core 한 방향뿐이다. core 쪽 Cargo.toml 에 rsm-modules 가
+# 등장하면 순환 의존이라 빌드 자체가 실패한다. 설계 규칙을 빌드가 강제한다.
+[dependencies]
+rsm-core = { path = "../rsm-core" }
+serde = { workspace = true }
+
+# dev-dependencies = 테스트·예제·벤치를 빌드할 때만 쓰는 의존성.
+# 실제 배포 바이너리에는 들어가지 않는다. 여기서는 테스트에서 YAML 파라미터를
+# 손으로 만들어 넣기 위해 필요하다.
+[dev-dependencies]
+serde_yaml_ng = { workspace = true }
+
+[lints]
+workspace = true

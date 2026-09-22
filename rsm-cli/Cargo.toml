@@ -1,0 +1,35 @@
+[package]
+name = "rsm-cli"
+description = "Robot Safety Monitor — runner that builds a pipeline from a single config file"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# [[bin]] = 실행 파일 타깃. 이중 대괄호는 TOML 에서 "배열의 항목"이라는 뜻이라
+# 여러 개를 둘 수 있다.
+#
+# 패키지 이름(rsm-cli)과 실행 파일 이름(rsm)을 일부러 다르게 뒀다.
+# 사용자가 치는 명령은 `rsm` 이고, 크레이트 이름은 크레이트 이름이다.
+# 이 블록이 없으면 src/main.rs 는 패키지 이름 그대로 rsm-cli 라는 실행 파일이 된다.
+#
+#   cargo run -p rsm-cli --bin rsm -- ...
+#                ^패키지      ^이 이름
+[[bin]]
+name = "rsm"
+path = "src/main.rs"
+
+[dependencies]
+rsm-core = { path = "../rsm-core" }
+rsm-modules = { path = "../rsm-modules" }
+serde_json = { workspace = true }   # JSONL 출력
+# 인자 파서(clap 등)를 일부러 넣지 않았다. 의존성 하나를 아끼려고 main.rs 에
+# 30줄짜리 파서를 손으로 썼다. 옵션이 늘어나면 그때 다시 판단한다.
+
+# 주의: 이 크레이트도 워크스페이스 lint 를 그대로 받는다. 즉 바이너리에서도
+# unwrap()/expect()/panic!() 이 금지다. main 은 ExitCode 를 돌려주고
+# 오류는 eprintln! + ExitCode::FAILURE 로 처리한다.
+[lints]
+workspace = true

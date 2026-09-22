@@ -1,0 +1,72 @@
+# demo-a — 팔(manipulator) 구성.
+#
+# 같은 바이너리, 다른 YAML. 이 파일과 demo-b.yaml 의 차이가 곧 "조합 가능"의
+# 증거다 (PRD G2). 코드는 한 줄도 바뀌지 않는다.
+#
+#   rsm check --config examples/demo-a.yaml
+#   rsm run   --config examples/demo-a.yaml --duration-ms 2000
+version: 1
+
+# 주기 그룹. 그룹 하나가 OS 스레드 하나다. 그룹 사이에는 신호를 공유하지
+# 않으며, 나가는 것은 HazardEvent 뿐이다.
+groups:
+  fast:                     # 관절 한계처럼 빨리 봐야 하는 것
+    period_hz: 1000
+    queue_capacity: 256
+  normal:                   # 거리·환경처럼 센서 주기가 느린 것
+    period_hz: 100
+    queue_capacity: 128
+
+modules:
+  # --- fast 그룹 ---
+  - name: joint_torque      # Source: 시험용 톱니파. 실제로는 ROS 2 구독자가 들어간다.
+    type: ramp
+    group: fast
+    params:
+      signal: joint.torque
+      min: 0.0
+      max: 120.0
+      step: 0.5
+
+  - name: torque_limit      # Detector: 한계 초과 감지
+    type: threshold
+    group: fast
+    params:
+      signal: joint.torque
+      limit: 100.0
+      direction: above
+      hazard: internal.joint.torque_limit
+      severity: critical
+      ttl_ms: 50            # 1 kHz 그룹이라 갱신이 잦다. TTL은 짧게.
+
+  # --- normal 그룹 ---
+  - name: front_lidar
+    type: ramp
+    group: normal
+    params:
+      signal: obstacle.distance
+      min: 0.2
+      max: 3.0
+      step: 0.05
+
+  - name: human_proximity
+    type: min_distance
+    group: normal
+    params:
+      signal: obstacle.distance
+      warn_m: 1.0
+      critical_m: 0.4
+      hazard: external.min_distance
+      ttl_ms: 300
+
+arbiter:
+  period_hz: 20             # 50 ms 마다 융합·출력
+
+supervisor:
+  period_hz: 10
+  group_stale_after_ms: 500 # 그룹이 이보다 오래 조용하면 Unavailable
+
+sink:
+  format: jsonl
+  path: "-"                 # "-" 는 표준출력
+  on_change_only: true      # 상태가 바뀔 때만 한 줄
