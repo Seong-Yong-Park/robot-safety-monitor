@@ -21,6 +21,7 @@
 | `docs/PRD.md` (v0.3) | 요구사항 R-01~R-24, 결정 D1~D19의 근거 |
 | `docs/TECH_STACK.md` (v1.0) | 기술 선택 T1~T16의 근거 |
 | `docs/CODE_TOUR.md` | 코드 읽는 순서 8정거장 + 증상→파일 표 |
+| `docs/ARCHITECTURE_MAP.html` | 구조 그림 7장(파이프라인·스레드/큐·의존 층·tick·고장 경로). 브라우저로 연다 |
 | `docs/BRIEF.md` | 새 대화에 붙여 넣는 한 장 요약 |
 | `private/WORKING.md` | 있으면 함께 읽는다. 개인 작업 메모이며 저장소에는 포함되지 않는다 |
 

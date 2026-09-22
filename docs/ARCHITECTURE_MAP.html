@@ -1,0 +1,691 @@
+<title>RSM 구조 지도</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --ground:#EEF1F2;
+  --surface:#FFFFFF;
+  --surface-2:#E4E9EB;
+  --ink:#15191B;
+  --ink-2:#4B575C;
+  --ink-3:#77868C;
+  --rule:#CFD7DA;
+  --rule-strong:#9FADB3;
+  --accent:#12626F;
+  --accent-soft:#D6E8EB;
+  --sev-none:#6B7A80;
+  --sev-adv:#2A6F94;
+  --sev-warn:#A26A05;
+  --sev-crit:#A93325;
+  --done:#12626F;
+
+  --f-sans:"IBM Plex Sans","IBM Plex Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif;
+  --f-kr:"IBM Plex Sans KR","IBM Plex Sans",-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#111618;
+    --surface:#191F22;
+    --surface-2:#222A2E;
+    --ink:#E4EAEC;
+    --ink-2:#A6B3B8;
+    --ink-3:#7D8B91;
+    --rule:#2B3438;
+    --rule-strong:#414E54;
+    --accent:#4FB4C2;
+    --accent-soft:#16333A;
+    --sev-none:#8B989E;
+    --sev-adv:#67B0D0;
+    --sev-warn:#D9A038;
+    --sev-crit:#E0796A;
+    --done:#4FB4C2;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#111618;
+  --surface:#191F22;
+  --surface-2:#222A2E;
+  --ink:#E4EAEC;
+  --ink-2:#A6B3B8;
+  --ink-3:#7D8B91;
+  --rule:#2B3438;
+  --rule-strong:#414E54;
+  --accent:#4FB4C2;
+  --accent-soft:#16333A;
+  --sev-none:#8B989E;
+  --sev-adv:#67B0D0;
+  --sev-warn:#D9A038;
+  --sev-crit:#E0796A;
+  --done:#4FB4C2;
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--f-kr);
+  font-size:16px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding-inline:20px;padding-block:0 96px}
+
+/* ---- masthead ---- */
+header.top{
+  border-bottom:2px solid var(--ink);
+  padding-block:56px 20px;
+  margin-bottom:8px;
+}
+.eyebrow{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);margin:0 0 14px;
+}
+h1{
+  font-family:var(--f-sans);
+  font-weight:600;font-size:clamp(30px,5.2vw,46px);line-height:1.12;
+  letter-spacing:-.02em;margin:0 0 16px;text-wrap:balance;
+}
+.dek{font-size:17px;color:var(--ink-2);max-width:62ch;margin:0}
+.meta{
+  display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:22px;
+  font-family:var(--f-mono);font-size:12px;color:var(--ink-3);
+}
+.meta b{color:var(--ink-2);font-weight:500}
+
+/* ---- sections ---- */
+section{padding-block:44px 0}
+h2{
+  font-family:var(--f-sans);
+  font-weight:600;font-size:25px;letter-spacing:-.012em;
+  margin:0 0 6px;text-wrap:balance;
+}
+h2 .num{
+  font-family:var(--f-mono);font-size:13px;color:var(--accent);
+  font-weight:500;margin-right:10px;letter-spacing:.04em;
+}
+h3{
+  font-family:var(--f-sans);font-weight:600;font-size:17px;
+  margin:32px 0 8px;letter-spacing:-.006em;
+}
+p{margin:0 0 16px;max-width:66ch}
+.lede{color:var(--ink-2);margin-bottom:26px;max-width:66ch}
+code{
+  font-family:var(--f-mono);font-size:.875em;
+  background:var(--surface-2);padding:.1em .34em;border-radius:3px;
+  color:var(--ink);
+}
+a{color:var(--accent)}
+
+/* ---- figures ---- */
+figure{
+  margin:30px 0;background:var(--surface);
+  border:1px solid var(--rule);border-radius:2px;
+  padding:22px 20px 16px;
+}
+.svgbox{overflow-x:auto}
+figure svg{display:block;max-width:100%;height:auto;min-width:560px;color:var(--ink-2)}
+figcaption{
+  margin-top:14px;padding-top:12px;border-top:1px solid var(--rule);
+  font-size:13.5px;color:var(--ink-3);line-height:1.6;
+}
+figcaption b{color:var(--ink-2);font-weight:500}
+
+/* svg text roles */
+.t-box{font-family:var(--f-sans);font-size:13px;font-weight:600;fill:var(--ink)}
+.t-sub{font-family:var(--f-mono);font-size:10.5px;fill:var(--ink-3)}
+.t-edge{font-family:var(--f-mono);font-size:10.5px;fill:var(--ink-2)}
+.t-band{font-family:var(--f-sans);font-size:12.5px;font-weight:500;fill:var(--ink-2)}
+.n-box{fill:var(--surface);stroke:var(--rule-strong);stroke-width:1.5}
+.n-accent{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.5}
+.n-band{fill:var(--surface-2);stroke:var(--rule);stroke-width:1}
+.n-ghost{fill:none;stroke:var(--rule-strong);stroke-width:1.5;stroke-dasharray:5 4}
+.ln{stroke:var(--rule-strong);stroke-width:1.5;fill:none}
+.ln-dash{stroke:var(--rule-strong);stroke-width:1.2;fill:none;stroke-dasharray:4 4}
+.ln-crit{stroke:var(--sev-crit);stroke-width:1.8;fill:none}
+.t-crit{font-family:var(--f-mono);font-size:10.5px;fill:var(--sev-crit)}
+
+/* ---- tables ---- */
+.tablebox{overflow-x:auto;margin:24px 0}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:14.5px}
+th,td{text-align:left;padding:10px 14px 10px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:500;border-bottom:1.5px solid var(--rule-strong);
+  padding-bottom:8px;
+}
+td:first-child{white-space:nowrap;padding-right:22px}
+td.mono{font-family:var(--f-mono);font-size:13px}
+
+/* ---- severity chips ---- */
+.sevrow{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 26px}
+.chip{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.05em;
+  padding:4px 11px;border-radius:2px;border:1px solid currentColor;
+}
+.c-none{color:var(--sev-none)}.c-adv{color:var(--sev-adv)}
+.c-warn{color:var(--sev-warn)}.c-crit{color:var(--sev-crit)}
+
+/* ---- startup rail ---- */
+ol.rail{list-style:none;margin:26px 0;padding:0 0 0 38px;position:relative}
+ol.rail::before{
+  content:"";position:absolute;left:11px;top:6px;bottom:10px;
+  width:2px;background:var(--rule);
+}
+ol.rail li{position:relative;margin-bottom:22px;max-width:64ch}
+ol.rail li::before{
+  content:counter(step);counter-increment:step;
+  position:absolute;left:-38px;top:1px;
+  width:24px;height:24px;border-radius:50%;
+  background:var(--surface);border:2px solid var(--rule-strong);
+  color:var(--ink-2);font-family:var(--f-mono);font-size:11px;font-weight:500;
+  display:flex;align-items:center;justify-content:center;
+}
+ol.rail{counter-reset:step}
+ol.rail li b{font-weight:600}
+ol.rail li .why{display:block;color:var(--ink-3);font-size:14px;margin-top:2px}
+
+/* ---- callout ---- */
+.note{
+  background:var(--surface);border:1px solid var(--rule);
+  border-left:3px solid var(--accent);
+  padding:18px 20px;margin:26px 0;border-radius:2px;
+}
+.note p:last-child{margin-bottom:0}
+.note .lbl{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--accent);display:block;margin-bottom:6px;
+}
+pre{
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;
+  background:var(--surface);border:1px solid var(--rule);
+  padding:16px 18px;overflow-x:auto;border-radius:2px;margin:20px 0;
+  color:var(--ink);
+}
+pre .cm{color:var(--ink-3)}
+pre .ok{color:var(--accent)}
+
+.legend{
+  display:flex;flex-wrap:wrap;gap:18px;margin-top:14px;
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);
+}
+.legend span{display:flex;align-items:center;gap:7px}
+.legend i{display:block;width:22px;height:0;border-top:2px solid var(--rule-strong)}
+.legend i.d{border-top-style:dashed}
+.legend i.f{border-top-color:var(--sev-crit)}
+
+footer{
+  margin-top:64px;padding-top:20px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:12px;color:var(--ink-3);
+}
+@media (max-width:640px){
+  body{font-size:15px}
+  figure{padding:16px 14px 12px}
+  header.top{padding-block:40px 18px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">Robot Safety Monitor · 구조 지도</p>
+  <h1>설정 파일 한 장이 감시 파이프라인을 만든다</h1>
+  <p class="dek">RSM은 로봇의 내부·외부 위험을 감지하는 모듈을 표준 트레이트로 규격화하고, YAML 선언만으로 조합하는 프레임워크다. 이 문서는 전체 구조와 <code>rsm-core</code>의 모듈들이 런타임에 어떻게 맞물리는지를 그림으로 정리한다. 코드를 읽는 순서는 <code>CODE_TOUR.md</code>가 안내한다.</p>
+  <div class="meta">
+    <span><b>범위</b> 감지 · 판단 · 알림 (제어 명령 발행 제외)</span>
+    <span><b>언어</b> Rust edition 2024</span>
+    <span><b>현재</b> Phase 0 완료 (상세는 <code>STATUS.md</code>)</span>
+  </div>
+</header>
+
+<section>
+  <h2><span class="num">A</span>네 단계와 두 개의 가로대</h2>
+  <p class="lede">파이프라인은 Source → Detector → Arbiter → Sink 네 단계다. 그 아래를 가로지르는 두 가지가 프레임워크의 성격을 결정한다. 모든 모듈이 같은 <b>주입된 시계</b>를 보고, 모든 모듈을 <b>Supervisor</b>가 감시한다.</p>
+
+  <figure>
+    <div class="svgbox">
+    <svg viewBox="0 0 880 330" role="img" aria-label="pipeline.yaml이 Source, Detector, Arbiter, Sink 네 단계를 선언하고, 그 아래를 Clock과 Supervisor가 가로지르는 구조">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <polygon points="0,1 10,5 0,9" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <rect x="40" y="22" width="790" height="38" rx="2" class="n-band"/>
+      <text x="435" y="46" text-anchor="middle" class="t-band">pipeline.yaml — 네 단계의 구성 · 파라미터 · 신호 연결을 전부 선언</text>
+
+      <g class="ln-dash">
+        <line x1="120" y1="60" x2="120" y2="100"/>
+        <line x1="330" y1="60" x2="330" y2="100"/>
+        <line x1="540" y1="60" x2="540" y2="100"/>
+        <line x1="750" y1="60" x2="750" y2="100"/>
+      </g>
+
+      <rect x="40" y="100" width="160" height="74" rx="2" class="n-box"/>
+      <text x="120" y="130" text-anchor="middle" class="t-box">Source</text>
+      <text x="120" y="150" text-anchor="middle" class="t-sub">센서·상태 → 신호</text>
+
+      <rect x="250" y="100" width="160" height="74" rx="2" class="n-box"/>
+      <text x="330" y="130" text-anchor="middle" class="t-box">Detector</text>
+      <text x="330" y="150" text-anchor="middle" class="t-sub">위험 1종 = 모듈 1개</text>
+
+      <rect x="460" y="100" width="160" height="74" rx="2" class="n-box"/>
+      <text x="540" y="130" text-anchor="middle" class="t-box">Arbiter</text>
+      <text x="540" y="150" text-anchor="middle" class="t-sub">max-severity + TTL</text>
+
+      <rect x="670" y="100" width="160" height="74" rx="2" class="n-box"/>
+      <text x="750" y="130" text-anchor="middle" class="t-box">Sink</text>
+      <text x="750" y="150" text-anchor="middle" class="t-sub">JSONL · stdout</text>
+
+      <g class="ln" marker-end="url(#ah)">
+        <line x1="200" y1="137" x2="243" y2="137"/>
+        <line x1="410" y1="137" x2="453" y2="137"/>
+        <line x1="620" y1="137" x2="663" y2="137"/>
+      </g>
+      <text x="221" y="128" text-anchor="middle" class="t-edge">Signal</text>
+      <text x="431" y="128" text-anchor="middle" class="t-edge">HazardEvent</text>
+      <text x="641" y="128" text-anchor="middle" class="t-edge">SafetyState</text>
+
+      <rect x="40" y="206" width="790" height="44" rx="2" class="n-accent"/>
+      <text x="56" y="233" class="t-band">Clock</text>
+      <text x="120" y="233" class="t-sub">now() 를 주입 — 실기는 단조 시계, 리플레이는 가상 시계, 시뮬레이션은 /clock</text>
+
+      <rect x="40" y="262" width="790" height="44" rx="2" class="n-band"/>
+      <text x="56" y="289" class="t-band">Supervisor</text>
+      <text x="152" y="289" class="t-sub">모듈 고장 · 그룹 스테일 · 큐 오버플로를 감시 → MonitorAvailability 를 Arbiter 로</text>
+
+      <g class="ln-dash">
+        <line x1="120" y1="174" x2="120" y2="206"/>
+        <line x1="330" y1="174" x2="330" y2="206"/>
+        <line x1="540" y1="174" x2="540" y2="206"/>
+        <line x1="750" y1="174" x2="750" y2="206"/>
+      </g>
+    </svg>
+    </div>
+    <figcaption><b>네 단계는 교체 가능하고, 두 가로대는 전역이다.</b> 시계를 주입받기 때문에 리플레이가 실행 속도와 무관하게 같은 결과를 내고, Supervisor가 따로 있기 때문에 감시기가 죽어도 그 침묵이 “안전함”으로 읽히지 않는다.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2><span class="num">B</span>흐르는 데이터는 세 가지뿐</h2>
+  <p class="lede">단계 사이를 오가는 타입이 셋으로 고정돼 있어서, 모듈을 추가해도 배관은 그대로다. 이게 “코어 수정 0줄로 모듈 추가”가 성립하는 이유다.</p>
+
+  <div class="tablebox">
+  <table>
+    <thead><tr><th>타입</th><th>만드는 쪽</th><th>쓰는 쪽</th><th>내용</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">Signal</td><td>Source</td><td>Detector</td>
+        <td>관절 각도·토크, 거리, 온도, 전압 같은 원시 관측값. 고정 enum이라 새 variant를 늘리면 처리 안 한 곳이 전부 빌드 에러로 드러난다.</td>
+      </tr>
+      <tr>
+        <td class="mono">HazardEvent</td><td>Detector</td><td>Arbiter</td>
+        <td>“토크 한계를 넘었다”는 한 건의 관측. 심각도·확신도·근거·TTL을 담는다. <b>TTL 동안만 유효한 주장</b>이라 갱신이 끊기면 스스로 소멸한다.</td>
+      </tr>
+      <tr>
+        <td class="mono">SafetyState</td><td>Arbiter</td><td>Sink</td>
+        <td>종합 심각도 + 활성 위험 목록 + <b>감시 가용성</b>. 소비 시스템이 보는 최종 산출물.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>심각도는 순서형이다</h3>
+  <div class="sevrow">
+    <span class="chip c-none">NONE</span>
+    <span class="chip c-adv">ADVISORY</span>
+    <span class="chip c-warn">WARNING</span>
+    <span class="chip c-crit">CRITICAL</span>
+  </div>
+  <p>순서가 있으므로 Arbiter의 기본 정책이 한 줄이 된다. 활성 이벤트의 심각도 중 최댓값을 취하고, TTL이 지난 것은 목록에서 빠진다.</p>
+
+  <div class="note">
+    <span class="lbl">설계 귀결</span>
+    <p><code>fast</code> 그룹은 1 kHz로 돌면서 tick 경로에서 힙 할당이 0이어야 한다. 그래서 <code>HazardEvent</code>에는 <code>String</code>이나 <code>Vec</code>을 넣을 수 없다. 모듈 이름과 위험 타입은 설정 로드 시점에 <b>인터닝된 정수 ID</b>로 바꾸고, 근거(evidence)는 고정 크기 배열로 담는다. 문자열로 되돌리는 것은 Sink에서 출력할 때뿐이다.</p>
+  </div>
+
+  <pre><span class="cm">// 이렇게 쓰면 tick 마다 할당이 생긴다</span>
+struct HazardEvent { source: String, kind: String, evidence: Vec&lt;(String, f64)&gt; }   <span class="cm">// ✗</span>
+
+<span class="cm">// 설정 로드 때 한 번 인터닝하고, 런타임에는 정수만 다룬다</span>
+struct HazardEvent { source: ModuleId, kind: HazardTypeId, evidence: EvidenceSet }  <span class="ok">// ✓</span></pre>
+</section>
+
+<section>
+  <h2><span class="num">C</span>런타임 — 스레드와 큐</h2>
+  <p class="lede">주기 그룹 하나가 OS 스레드 하나다. 그룹 안에서는 모듈이 정해진 순서로 순차 실행되고, 그룹 사이는 wait-free SPSC 링버퍼로만 이어진다. 느린 모듈이 빠른 모듈을 막지 못하게 하는 구조다.</p>
+
+  <figure>
+    <div class="svgbox">
+    <svg viewBox="0 0 880 490" role="img" aria-label="main 스레드가 주기 그룹 스레드들과 Supervisor 스레드를 기동하고, 각 그룹이 SPSC 큐로 Arbiter 스레드에 이벤트를 보내면 Arbiter가 Sink로 SafetyState를 내보내는 구조">
+      <defs>
+        <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <polygon points="0,1 10,5 0,9" fill="currentColor"/>
+        </marker>
+        <marker id="ahc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <polygon points="0,1 10,5 0,9" fill="var(--sev-crit)"/>
+        </marker>
+      </defs>
+
+      <rect x="250" y="18" width="380" height="54" rx="2" class="n-box"/>
+      <text x="440" y="42" text-anchor="middle" class="t-box">main 스레드</text>
+      <text x="440" y="60" text-anchor="middle" class="t-sub">설정 로드 · 팩토리 호출 · 큐 할당 · 스레드 기동</text>
+
+      <g class="ln" marker-end="url(#ah2)">
+        <path d="M 440 72 V 96 H 120 V 132"/>
+        <path d="M 440 72 V 96 H 330 V 132"/>
+        <path d="M 440 72 V 96 H 540 V 132"/>
+        <path d="M 440 72 V 96 H 755 V 132"/>
+      </g>
+      <text x="452" y="112" class="t-edge">spawn</text>
+
+      <rect x="30" y="132" width="180" height="112" rx="2" class="n-box"/>
+      <text x="120" y="158" text-anchor="middle" class="t-box">fast 그룹</text>
+      <text x="120" y="176" text-anchor="middle" class="t-sub">1 kHz · 전용 스레드</text>
+      <line x1="46" y1="188" x2="194" y2="188" class="ln-dash"/>
+      <text x="120" y="207" text-anchor="middle" class="t-sub">joint_torque (ramp)</text>
+      <text x="120" y="224" text-anchor="middle" class="t-sub">torque_limit (threshold)</text>
+
+      <rect x="240" y="132" width="180" height="112" rx="2" class="n-box"/>
+      <text x="330" y="158" text-anchor="middle" class="t-box">normal 그룹</text>
+      <text x="330" y="176" text-anchor="middle" class="t-sub">100 Hz · 전용 스레드</text>
+      <line x1="256" y1="188" x2="404" y2="188" class="ln-dash"/>
+      <text x="330" y="207" text-anchor="middle" class="t-sub">front_lidar (ramp)</text>
+      <text x="330" y="224" text-anchor="middle" class="t-sub">human_proximity (min_distance)</text>
+
+      <rect x="450" y="132" width="180" height="112" rx="2" class="n-ghost"/>
+      <text x="540" y="158" text-anchor="middle" class="t-box">async 그룹</text>
+      <text x="540" y="176" text-anchor="middle" class="t-sub">입력 주도 · 가변 지연</text>
+      <line x1="466" y1="188" x2="614" y2="188" class="ln-dash"/>
+      <text x="540" y="207" text-anchor="middle" class="t-sub">ml.person_detect</text>
+      <text x="540" y="224" text-anchor="middle" class="t-sub">Phase 2 이후</text>
+
+      <rect x="660" y="132" width="190" height="112" rx="2" class="n-box"/>
+      <text x="755" y="158" text-anchor="middle" class="t-box">Supervisor</text>
+      <text x="755" y="176" text-anchor="middle" class="t-sub">저주기 · 독립 스레드</text>
+      <line x1="676" y1="188" x2="834" y2="188" class="ln-dash"/>
+      <text x="755" y="207" text-anchor="middle" class="t-sub">고장 · 스테일 · 오버플로</text>
+      <text x="755" y="224" text-anchor="middle" class="t-sub">원자 카운터만 읽는다</text>
+
+      <g class="ln" marker-end="url(#ah2)">
+        <path d="M 120 244 V 300 H 340 V 332"/>
+        <path d="M 330 244 V 332"/>
+      </g>
+      <path d="M 540 244 V 300 H 470 V 332" class="ln-dash" marker-end="url(#ah2)"/>
+      <text x="196" y="292" class="t-edge">rtrb SPSC 큐 (그룹마다 1개)</text>
+
+      <path d="M 755 244 V 362 H 566" class="ln-crit" marker-end="url(#ahc)"/>
+      <text x="612" y="354" class="t-crit">MonitorAvailability</text>
+
+      <rect x="300" y="332" width="260" height="62" rx="2" class="n-accent"/>
+      <text x="430" y="358" text-anchor="middle" class="t-box">Arbiter 스레드</text>
+      <text x="430" y="376" text-anchor="middle" class="t-sub">큐 순회 폴링 → 융합 → SafetyState</text>
+
+      <line x1="430" y1="394" x2="430" y2="424" class="ln" marker-end="url(#ah2)"/>
+      <text x="440" y="414" class="t-edge">SafetyState</text>
+
+      <rect x="300" y="424" width="260" height="50" rx="2" class="n-box"/>
+      <text x="430" y="454" text-anchor="middle" class="t-box">Sink</text>
+    </svg>
+    </div>
+    <div class="legend">
+      <span><i></i> Phase 0 범위</span>
+      <span><i class="d"></i> Phase 2 이후</span>
+      <span><i class="f"></i> 고장·가용성 경로</span>
+    </div>
+    <figcaption><b>그룹마다 큐를 하나씩 두는 이유.</b> 여러 그룹이 Arbiter 하나로 보내면 자연스럽게 다대일이지만, 큐를 그룹 수만큼 두면 각 큐는 생산자 1 · 소비자 1이 되어 전부 SPSC로 환원된다. CAS 경합이 사라져 push/pop의 최악 실행 시간을 말할 수 있게 된다.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2><span class="num">D</span>rsm-core 의 층과 의존 방향</h2>
+  <p class="lede">아래에서 위로만 의존한다. 아래층이 위층을 모르기 때문에 각 층이 독립적으로 컴파일되고 테스트된다. 그림은 뼈대만 그렸고, <code>intern.rs</code> · <code>arbiter.rs</code> · <code>error.rs</code> 는 아래 표에만 있다.</p>
+
+  <figure>
+    <div class="svgbox">
+    <svg viewBox="0 0 800 380" role="img" aria-label="time·event·signal이 최하층, traits가 그 위, registry와 config가 그 위, schedule과 supervisor가 그 위, rsm-modules와 rsm-cli가 최상층인 의존 그래프">
+      <defs>
+        <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <polygon points="0,1 10,5 0,9" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <text x="20" y="34" class="t-sub">rsm-modules · rsm-cli</text>
+      <rect x="230" y="16" width="160" height="40" rx="2" class="n-box"/>
+      <text x="310" y="41" text-anchor="middle" class="t-box">레퍼런스 모듈 7종</text>
+      <rect x="410" y="16" width="160" height="40" rx="2" class="n-box"/>
+      <text x="490" y="41" text-anchor="middle" class="t-box">rsm-cli</text>
+
+      <text x="20" y="110" class="t-sub">실행</text>
+      <rect x="230" y="92" width="160" height="40" rx="2" class="n-box"/>
+      <text x="310" y="117" text-anchor="middle" class="t-box">schedule.rs</text>
+      <rect x="410" y="92" width="160" height="40" rx="2" class="n-box"/>
+      <text x="490" y="117" text-anchor="middle" class="t-box">supervisor.rs</text>
+
+      <text x="20" y="186" class="t-sub">조립</text>
+      <rect x="230" y="168" width="160" height="40" rx="2" class="n-box"/>
+      <text x="310" y="193" text-anchor="middle" class="t-box">registry.rs</text>
+      <rect x="410" y="168" width="160" height="40" rx="2" class="n-box"/>
+      <text x="490" y="193" text-anchor="middle" class="t-box">config.rs</text>
+
+      <text x="20" y="262" class="t-sub">계약</text>
+      <rect x="320" y="244" width="160" height="40" rx="2" class="n-box"/>
+      <text x="400" y="269" text-anchor="middle" class="t-box">traits.rs</text>
+
+      <text x="20" y="338" class="t-sub">타입</text>
+      <rect x="150" y="320" width="150" height="40" rx="2" class="n-box"/>
+      <text x="225" y="345" text-anchor="middle" class="t-box">time.rs</text>
+      <rect x="320" y="320" width="150" height="40" rx="2" class="n-box"/>
+      <text x="395" y="345" text-anchor="middle" class="t-box">event.rs</text>
+      <rect x="490" y="320" width="150" height="40" rx="2" class="n-box"/>
+      <text x="565" y="345" text-anchor="middle" class="t-box">signal.rs</text>
+
+      <g class="ln" marker-end="url(#ah3)">
+        <path d="M 225 320 V 300 H 380 V 288"/>
+        <path d="M 395 320 V 288"/>
+        <path d="M 565 320 V 300 H 420 V 288"/>
+        <path d="M 380 244 V 226 H 310 V 212"/>
+        <path d="M 420 244 V 226 H 490 V 212"/>
+        <path d="M 310 168 V 136"/>
+        <path d="M 490 168 V 136"/>
+        <path d="M 310 92 V 60"/>
+        <path d="M 490 92 V 60"/>
+      </g>
+      <text x="600" y="240" class="t-edge">화살표 = “~를 쓴다”</text>
+    </svg>
+    </div>
+    <figcaption><b>읽는 순서가 곧 의존 순서다.</b> 타입(<code>event.rs</code>·<code>signal.rs</code>) → 계약(<code>traits.rs</code>) → 조립 → 실행. 트레이트가 이 타입들을 시그니처에 쓰므로 타입부터 봐야 한다. <code>CODE_TOUR.md</code>의 정거장 순서가 이 그림을 따른다.</figcaption>
+  </figure>
+
+  <div class="tablebox">
+  <table>
+    <thead><tr><th>파일</th><th>소유하는 것</th><th>핵심 결정</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">time.rs</td><td>Instant · Duration · Clock · MonotonicClock · VirtualClock</td><td>코어에서 OS 시계를 부르는 유일한 곳. clippy 가 강제</td></tr>
+      <tr><td class="mono">event.rs</td><td>Severity · Category · HazardEvent · EvidenceSet · SafetyState · MonitorAvailability</td><td>할당 0을 위해 문자열 대신 인터닝 ID</td></tr>
+      <tr><td class="mono">signal.rs</td><td>Signal enum · SignalId · SignalSlot · SignalBus</td><td>고정 variant. <code>Signal::Custom</code> 확장은 아직 없다</td></tr>
+      <tr><td class="mono">intern.rs</td><td>Interner · Names</td><td>이름 → u16. 역변환은 Sink 출력 직전 한 곳</td></tr>
+      <tr><td class="mono">traits.rs</td><td>Source · Detector · ArbiterPolicy · Sink · EventSink · ModuleCtx · Params · Health</td><td>tick 은 <code>now</code> 를 인자로 받는다</td></tr>
+      <tr><td class="mono">registry.rs</td><td>이름 → 팩토리 표 (<code>fn() -&gt; Box&lt;dyn Detector&gt;</code>)</td><td>팩토리 시그니처를 dlsym 호환 형태로 고정</td></tr>
+      <tr><td class="mono">config.rs</td><td>YAML 스키마 · 검증 · 조립 (PipelineConfig → BuiltPipeline)</td><td>모호한 설정은 기동 실패, 묵시적 무시 금지</td></tr>
+      <tr><td class="mono">error.rs</td><td>ConfigError</td><td>기동 실패 메시지는 전부 여기</td></tr>
+      <tr><td class="mono">schedule.rs</td><td>GroupWorker · ArbiterWorker · QueueSink · Runtime · run()</td><td>절대 시각 기준 sleep 으로 드리프트 방지 · 모듈 호출마다 catch_unwind</td></tr>
+      <tr><td class="mono">arbiter.rs</td><td>MaxSeverity 융합 정책</td><td>최신 관측으로 덮어쓰기 → TTL 만료 제거 → 최고 심각도</td></tr>
+      <tr><td class="mono">supervisor.rs</td><td>HealthRegistry(원자 변수) · scan() → MonitorAvailability</td><td>TTL 만료와는 독립된 별개 메커니즘. 큐를 쓰지 않는다</td></tr>
+      <tr><td class="mono">rsm-cli</td><td>run · check · list 서브커맨드 · JSONL Sink</td><td>나중에 replay 가 여기 붙는다</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">E</span>기동할 때 무슨 일이 일어나나</h2>
+  <p class="lede">여기가 “설정만으로 조합”이 실제로 벌어지는 지점이다. 모든 동적 결정과 메모리 할당이 이 구간에서 끝나고, 그 뒤로는 고정된 구조가 반복해서 돌 뿐이다.</p>
+
+  <ol class="rail">
+    <li><b>YAML 파싱</b> — <code>serde</code>로 주기 그룹, 모듈 목록, 파라미터, 신호 연결을 읽는다.
+      <span class="why">모르는 필드가 있으면 여기서 실패한다. 오타가 조용히 무시되는 것을 막기 위해서다.</span></li>
+    <li><b>레지스트리 조회</b> — 설정이 참조한 이름이 등록되어 있는지 확인한다.
+      <span class="why">없으면 <code>UnknownModule</code>로 기동 실패. 실행 중에 발견되면 늦다.</span></li>
+    <li><b>인터닝</b> — 모듈 이름과 위험 타입 문자열을 정수 ID로 바꾸고 역변환표를 만든다.
+      <span class="why">이후 런타임 경로에서 문자열이 사라진다.</span></li>
+    <li><b>팩토리 호출</b> — 각 모듈을 힙에 만들고 <code>Box&lt;dyn Detector&gt;</code>로 받는다. 파라미터를 넘겨 <code>configure</code>한다.
+      <span class="why">이 시점에 모듈은 필요한 입력 신호를 선언하고, 연결이 비면 기동 실패한다.</span></li>
+    <li><b>큐 할당</b> — 그룹마다 고정 용량 SPSC 링버퍼를 하나씩 만든다.
+      <span class="why">용량은 설정값. 이후로 큐 메모리는 늘지도 줄지도 않는다.</span></li>
+    <li><b>스레드 기동</b> — 그룹 스레드 · Arbiter 스레드 · Supervisor 스레드를 띄우고 시계를 주입한다.
+      <span class="why">실시간 우선순위 지정은 아직 없다 (Phase 1 이후). 지금은 일반 우선순위로 돈다.</span></li>
+  </ol>
+
+  <div class="note">
+    <span class="lbl">이 순서가 주는 것</span>
+    <p>설정 오류는 전부 기동 전에 드러나고, 할당은 전부 기동 중에 끝난다. 그래서 <code>fast</code> 그룹의 tick 경로에 할당이 0이라는 요구가 성립할 수 있다.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">F</span>한 tick 안에서</h2>
+  <p class="lede"><code>fast</code> 그룹이 1 kHz로 돈다면 한 주기는 1 ms다. 그 안에서 벌어지는 일은 언제나 같은 순서다.</p>
+
+  <figure>
+    <div class="svgbox">
+    <svg viewBox="0 0 860 210" role="img" aria-label="1밀리초 주기 안에서 신호 스냅샷, 모듈 순차 tick, 이벤트 push, 계측 기록이 끝나고 다음 마감까지 대기하는 타임라인">
+      <defs>
+        <marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <polygon points="0,1 10,5 0,9" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <line x1="40" y1="150" x2="820" y2="150" class="ln"/>
+      <g class="ln">
+        <line x1="40" y1="142" x2="40" y2="158"/>
+        <line x1="560" y1="142" x2="560" y2="158"/>
+        <line x1="800" y1="142" x2="800" y2="158"/>
+      </g>
+      <text x="40" y="176" text-anchor="middle" class="t-sub">t = 0</text>
+      <text x="800" y="176" text-anchor="middle" class="t-sub">t = 1 ms</text>
+      <text x="680" y="176" text-anchor="middle" class="t-sub">sleep_until(다음 마감)</text>
+
+      <rect x="40" y="52" width="130" height="44" rx="2" class="n-box"/>
+      <text x="105" y="72" text-anchor="middle" class="t-box">now()</text>
+      <text x="105" y="88" text-anchor="middle" class="t-sub">시계 1회 읽기</text>
+
+      <rect x="185" y="52" width="180" height="44" rx="2" class="n-box"/>
+      <text x="275" y="72" text-anchor="middle" class="t-box">detector[0].tick</text>
+      <text x="275" y="88" text-anchor="middle" class="t-sub">catch_unwind 경계</text>
+
+      <rect x="380" y="52" width="180" height="44" rx="2" class="n-box"/>
+      <text x="470" y="72" text-anchor="middle" class="t-box">detector[1].tick</text>
+      <text x="470" y="88" text-anchor="middle" class="t-sub">순서는 설정이 정한다</text>
+
+      <rect x="575" y="52" width="155" height="44" rx="2" class="n-accent"/>
+      <text x="652" y="72" text-anchor="middle" class="t-box">계측 슬롯 기록</text>
+      <text x="652" y="88" text-anchor="middle" class="t-sub">원자 연산만</text>
+
+      <g class="ln" marker-end="url(#ah4)">
+        <line x1="105" y1="96" x2="105" y2="144"/>
+        <line x1="275" y1="96" x2="275" y2="144"/>
+        <line x1="470" y1="96" x2="470" y2="144"/>
+        <line x1="652" y1="96" x2="652" y2="144"/>
+      </g>
+
+      <path d="M 275 40 V 24 H 470 V 40" class="ln-dash"/>
+      <text x="372" y="18" text-anchor="middle" class="t-edge">tick 마다 HazardEvent 를 SPSC 큐로 push</text>
+
+      <path d="M 560 150 Q 680 132 800 150" class="ln-dash"/>
+    </svg>
+    </div>
+    <figcaption><b>시계는 tick 당 한 번만 읽는다.</b> 같은 tick 안의 모든 모듈이 같은 <code>now</code>를 보기 때문에, 판정이 모듈 실행 순서에 따라 흔들리지 않는다. 대기는 경과 시간이 아니라 <b>절대 마감 시각</b> 기준이라 tick 실행 시간만큼 주기가 밀리는 드리프트가 누적되지 않는다.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2><span class="num">G</span>무언가 잘못됐을 때</h2>
+  <p class="lede">이 프로젝트에서 가장 신경 쓴 부분이다. 감시 시스템의 최악 실패는 오경보가 아니라 <b>조용해지는 것</b>이다. 세 가지 고장이 전부 같은 곳으로 모인다.</p>
+
+  <figure>
+    <div class="svgbox">
+    <svg viewBox="0 0 820 280" role="img" aria-label="모듈 패닉, 그룹 스테일, 큐 오버플로 세 경로가 모두 Supervisor를 거쳐 MonitorAvailability로 수렴하고 SafetyState.availability에 반영되는 그림">
+      <defs>
+        <marker id="ah5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <polygon points="0,1 10,5 0,9" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <rect x="24" y="20" width="220" height="52" rx="2" class="n-box"/>
+      <text x="134" y="42" text-anchor="middle" class="t-box">모듈이 패닉했다</text>
+      <text x="134" y="60" text-anchor="middle" class="t-sub">catch_unwind → Faulted → 이후 tick 건너뜀</text>
+
+      <rect x="24" y="92" width="220" height="52" rx="2" class="n-box"/>
+      <text x="134" y="114" text-anchor="middle" class="t-box">그룹이 멈췄다</text>
+      <text x="134" y="132" text-anchor="middle" class="t-sub">마지막 tick 이후 group_stale_after 초과</text>
+
+      <rect x="24" y="164" width="220" height="52" rx="2" class="n-box"/>
+      <text x="134" y="186" text-anchor="middle" class="t-box">큐가 넘쳤다</text>
+      <text x="134" y="204" text-anchor="middle" class="t-sub">이벤트 유실 = 감시 실패</text>
+
+      <g class="ln" marker-end="url(#ah5)">
+        <path d="M 244 46 H 300 V 112"/>
+        <path d="M 244 118 H 316"/>
+        <path d="M 244 190 H 300 V 124"/>
+      </g>
+
+      <rect x="324" y="92" width="170" height="52" rx="2" class="n-box"/>
+      <text x="409" y="114" text-anchor="middle" class="t-box">Supervisor</text>
+      <text x="409" y="132" text-anchor="middle" class="t-sub">독립 스레드</text>
+
+      <line x1="494" y1="118" x2="546" y2="118" class="ln-crit" marker-end="url(#ah5)" color="var(--sev-crit)"/>
+
+      <rect x="550" y="80" width="246" height="76" rx="2" class="n-accent"/>
+      <text x="673" y="106" text-anchor="middle" class="t-box">MonitorAvailability</text>
+      <text x="673" y="126" text-anchor="middle" class="t-sub">SafetyState.availability</text>
+      <text x="673" y="144" text-anchor="middle" class="t-sub">Available / Degraded / Unavailable</text>
+
+      <path d="M 409 144 V 200 H 673 V 164" class="ln-dash" marker-end="url(#ah5)"/>
+      <text x="520" y="218" text-anchor="middle" class="t-edge">그룹 스레드가 tick 끝에 원자 카운터를 올리고, Supervisor 가 주기적으로 읽는다 (큐 없음)</text>
+    </svg>
+    </div>
+    <figcaption><b>침묵은 상태가 아니라 이벤트다.</b> TTL 만료(이벤트가 스스로 소멸하는 것)와 Supervisor(감시기 자체의 생존)는 독립된 두 메커니즘이다. TTL만 있으면 감시기가 죽었을 때 위험 이벤트가 조용히 사라져 NONE으로 보인다.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2><span class="num">H</span>Phase 0 완료 조건 — 달성</h2>
+  <p class="lede">완료 조건은 하나였다. 같은 바이너리에 다른 설정을 줘서 서로 다른 감시 구성이 도는 것. 지금 이렇게 돈다.</p>
+
+  <pre>$ rsm check --config examples/demo-a.yaml
+OK  groups 2 · modules 4 · signals 2
+    [fast] 1000.0 Hz  source 1 · detector 1
+    [normal] 100.0 Hz  source 1 · detector 1
+
+$ rsm run --config examples/demo-a.yaml --duration-ms 2000
+{"ts_ns":...,"level":"CRITICAL","availability":"Available","active":[{"source":"torque_limit","kind":"internal.joint.torque_limit",...}]}
+{"ts_ns":...,"level":"NONE","availability":"Available","active":[]}
+<span class="cm">[rsm]</span> group0 tick 1998 · overrun 0 · overflow 0 · max ... ns · mean ... ns</pre>
+
+  <p><code>demo-b.yaml</code>은 모듈 구성이 다르고(이동로봇 · 통신 두절 · 고의 패닉), 같은 바이너리로 돈다. 패닉 메시지가 찍히지만 프로세스는 살아 있고 <code>availability</code>가 <code>Degraded</code>로 바뀐다. 이것이 G2(조합 가능성)의 최소 증명이고, 여기서부터 레퍼런스 모듈을 늘려 v0.5로 간다.</p>
+
+  <div class="tablebox">
+  <table>
+    <thead><tr><th>검증 항목</th><th>어떻게 확인하나</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td>설정만으로 구성 변경</td><td>demo-a / demo-b 를 같은 바이너리로 실행</td><td>확인</td></tr>
+      <tr><td>주기 그룹 2개 독립 동작</td><td>demo-a 의 fast 1 kHz + normal 100 Hz, overrun 0</td><td>확인</td></tr>
+      <tr><td>모듈 고장 격리</td><td><code>panic_probe</code> 를 demo-b 에 배치, 해당 모듈만 Faulted</td><td>확인</td></tr>
+      <tr><td>감시 불가 명시</td><td><code>stalling</code> + <code>comm_timeout</code> 으로 <code>availability</code> 가 Degraded 로 바뀌는지</td><td>확인</td></tr>
+      <tr><td>tick 경로 할당 0</td><td>전역 할당자를 테스트용으로 교체해 카운터가 0인지</td><td>Phase 1 (설계상 없음, 계측 미구현)</td></tr>
+      <tr><td>시계 주입</td><td>가상 시계로 tick 을 손으로 밟는 통합 시험 (<code>rsm-modules/tests/pipeline.rs</code>)</td><td>확인</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<footer>
+  RSM 구조 지도 · PRD v0.3 / TECH_STACK v1.0 · Phase 0 완료 코드 기준 (2026-09-22 갱신) · 읽는 순서는 CODE_TOUR.md
+</footer>
+
+</div>
