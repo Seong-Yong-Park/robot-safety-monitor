@@ -28,6 +28,7 @@
 | D17 | **오픈소스 공개, Apache-2.0 단독, DCO**. 공개 시점 v0.5 |
 | D18 | 코딩 규칙 확정 — 아래 T10 |
 | D19 | 투입 시간 **주당 10시간** |
+| D20 | 위험 타입 이름은 **`<category>.<subject>.<condition>`**. 첫 토막은 `Category`와 일치, `condition`은 위반을 말함, **같은 이름 = Arbiter가 합치는 단위**. 모듈 `name`은 인스턴스("어디서")이며 위험 이름과 독립 |
 
 ## 기술 스택 결정 (TECH_STACK v1.0)
 
@@ -56,7 +57,7 @@
 |---|---|
 | 신호 타입 시스템 | 고정 enum(`Bool`/`Scalar`/`Vector`/`Distance`) + `Custom` 확장 구멍 |
 | 큐 오버플로 정책 | **`MonitorUnavailable` 승격** — 이벤트를 조용히 버리지 않는다 |
-| 위험 타입 네이밍 | 계층 문자열 `internal.joint.torque_limit`. 런타임에는 인터닝된 `HazardTypeId` |
+| 위험 타입 네이밍 | **D20으로 승격.** 3단 계층 문자열, 런타임에는 인터닝된 `HazardTypeId` |
 | Supervisor 자체 생존 | v1은 **heartbeat Sink**. 프로세스 밖 감시는 R-21 영역 |
 | 실행 파일 | `rsm-cli` 크레이트 추가 (`run` 서브커맨드, 이후 `validate`·`replay`) |
 
@@ -82,3 +83,4 @@ Sink에서 출력할 때뿐이다.
 | rclrs의 Jazzy 지원·기능 커버리지 재확인, 설치 절차 스크립트화 | Phase 3 착수 |
 | ARM 실기 검증 1회 | Phase 2 |
 | DCO → CLA 전환 재검토 | 외부 기여 발생 시 |
+| `hazard` 접두어 ↔ `Category` 불일치를 `configure` 기동 실패로 강제, 데모 모듈 `name` 정리 (D20-a) | Phase 1 |

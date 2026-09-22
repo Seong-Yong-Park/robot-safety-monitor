@@ -3,8 +3,8 @@
 | 항목 | 내용 |
 |---|---|
 | 문서 버전 | v0.3 |
-| 작성일 | 2026-09-12 (v0.1 / v0.2) → 2026-09-15 (v0.3) |
-| 상태 | **의사결정 전건 확정.** 기술 스택은 `docs/TECH_STACK.md` v1.0 참조 |
+| 작성일 | 2026-09-12 (v0.1 / v0.2) → 2026-09-15 (v0.3) → 2026-09-22 (D20 추가) |
+| 상태 | **의사결정 전건 확정.** 기술 스택은 `docs/TECH_STACK.md` v1.0 참조. §10 열린 질문 중 위험 타입 네이밍은 D20으로 확정 |
 | 용도 | 개인 프로젝트 개발 가이드 (설계 기준 문서) |
 | v0.3 변경 요약 | 잔여 사안 D13~D19 전부 확정(§9.1로 이동), **v0.5 중간 마일스톤 도입**으로 §8 일정 재구성, 주당 10시간 기준 공수 산정 추가, G4에 실행 플랫폼 caveat 명시 |
 
@@ -215,6 +215,7 @@ v0.5를 두는 이유: (1) G1의 핵심 주장("설정만 바꿔 다른 구성�
 | D17 | **오픈소스 공개, 라이선스 Apache-2.0 단독.** 기여자 협약은 DCO로 시작, 공개 시점은 **v0.5** | 특허 조항으로 기업 법무 통과가 쉽고 기여자 조건이 명시됨. GPL/AGPL은 잠재 고객(로봇 회사)의 채택을 막아 사업화와 충돌. **open-core는 지금 정하지 않음** — 전부 열어도 지원·전용 감지기·검증 산출물·교육이 남고, 널리 쓰일수록 그 가치가 커짐. 단일 리포 구조라 나중 분리 가능 |
 | D18 | **코딩 규칙 확정** — `rsm-core`에 `forbid(unsafe_code)`, `clippy::pedantic` 켬, `unwrap/expect/panic` deny(라이브러리), `indexing_slicing`은 핫패스 한정, `cargo-deny`로 라이선스·금지·취약점 검사 | 상세는 TECH_STACK T10. 첫 커밋부터 CI 적용 |
 | D19 | **투입 시간: 주당 10시간** | §8 공수·기간의 기준 |
+| D20 | **위험 타입 이름 규약: `<category>.<subject>.<condition>`** (예: `internal.joint.torque_limit`, `internal.battery.low`, `external.obstacle.min_distance`). (1) 첫 토막은 `Category`(`internal`/`external`/`ml`)와 일치한다. (2) `condition`은 값이 아니라 **위반**을 말한다 (`torque`가 아니라 `torque_limit`). (3) **이름이 같으면 Arbiter가 같은 위험으로 합친다** — 소비자가 따로 봐야 할 위험은 이름을 나누고(`internal.arm_l.torque_limit` / `internal.arm_r.torque_limit`), 같은 조건의 중복 관측자만 이름을 공유한다. 모듈 `name`은 **인스턴스("어디서", `front_lidar`)** 이며 위험 이름과 독립이다 | 설정·로그·ROS 토픽에서 같은 문자열을 쓰고(R-04), Arbiter 병합 키가 이 이름이므로(D4) "이름 = 병합 단위"를 규약으로 못 박아야 설정 실수가 조용한 덮어쓰기로 이어지지 않는다. 런타임에는 인터닝된 `HazardTypeId`라 이름 길이가 비용이 아니다. 접두어-Category 일치는 v0.5까지 관례로 두고 Phase 1에 `configure` 단계 기동 실패로 강제한다(D20-a) |
 
 ### 9.2 후속 확인 항목
 
@@ -225,6 +226,7 @@ v0.5를 두는 이유: (1) G1의 핵심 주장("설정만 바꿔 다른 구성�
 | D16-a | ARM 실기(보유 보드) 검증 1회 — `rsm-ml` 포함 여부는 그때 판단 | Phase 2 |
 | D17-a | 외부 기여가 들어오기 시작하면 DCO → CLA 전환 재검토 | 공개 후 |
 | D16-b | Windows에서 1 kHz 주기가 실제로 필요해지면 `timeBeginPeriod(1)`을 `rsm-sys`로 격리해 도입 검토 | 필요 시 |
+| D20-a | `hazard` 접두어와 모듈의 `Category` 불일치를 `configure`에서 기동 실패로 강제. 데모의 모듈 `name`을 위험 이름과 겹치지 않게 정리(`torque_limit` → `joint_torque_guard` 식) | Phase 1 |
 
 ## 10. 열린 질문 (설계 세부)
 
@@ -232,7 +234,6 @@ v0.5를 두는 이유: (1) G1의 핵심 주장("설정만 바꿔 다른 구성�
 |---|---|---|
 | 신호 타입 시스템의 강도 — 고정 타입 세트(`Scalar/Vector/Pose/PointCloud/Image`) + 사용자 정의 타입 등록 | Phase 1 초기 | 등록 메커니즘을 R-03 레지스트리와 동일 구조로 |
 | 그룹 간 큐 용량·오버플로 정책 (drop-oldest vs 오버플로를 `MonitorUnavailable`로 승격) | Phase 1 | 안전 관점에서는 후자가 보수적 |
-| `HazardEvent.type` 네이밍 규약 (`internal.joint.torque_limit` 식 계층 네임스페이스?) | Phase 1 | 설정 파일·로그·ROS 토픽에서 동일하게 쓰임 |
 | Supervisor 자체가 죽었을 때의 탐지 (외부 watchdog? ROS diagnostics?) | Phase 1 | v1은 프로세스 단위 heartbeat Sink로 충분할 수 있음 |
 
 ## 11. 용어
