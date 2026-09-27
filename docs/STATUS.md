@@ -17,7 +17,7 @@
 | 빌드·규칙 인프라 | **완료** — 워크스페이스, 툴체인 고정, clippy·cargo-deny 정책 |
 | CI 워크플로 | 파일 작성됨, `.github/workflows/`에 배치 필요 |
 | 문서 | README·CONTRIBUTING·BRIEF·DECISIONS·이 문서 |
-| git | 로컬 저장소 + remote 연결 완료. **첫 push 미수행** |
+| git | 로컬 저장소 + remote 연결, Phase 0 커밋(`efa1901`)까지 push 완료 |
 | **rsm-core** | **완료** — 11개 모듈 전부 구현, 단위 테스트 34 + doctest 1 |
 | **rsm-modules** | **완료** — Source 3종 · Detector 4종, 단위 8 + 통합 3 |
 | **rsm-cli** | **완료** — `rsm run` / `rsm check` / `rsm list`, JSONL 출력 |
@@ -98,7 +98,6 @@ Windows에서 개발할 때는 `fast` 그룹 주기를 200 Hz 정도로 낮춰 �
 |---|---|
 | `LICENSE`가 자리표시자 | `Invoke-WebRequest https://www.apache.org/licenses/LICENSE-2.0.txt -OutFile LICENSE` |
 | CI 워크플로 미배치 | `.github/workflows/ci.yml`·`heavy.yml` 저장 후 커밋 |
-| 첫 push 미수행 | `git push -u origin main` (원격 저장소는 비어 있어 충돌 없음) |
 | `Cargo.toml`의 `repository` | `https://github.com/OWNER/...` 자리표시자 → 실제 주소로 |
 
 ## 마일스톤
