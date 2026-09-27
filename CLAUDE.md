@@ -18,7 +18,8 @@
 |---|---|
 | `docs/STATUS.md` | **작업 시작 시 항상.** 지금 어디까지 됐는지 |
 | `docs/DECISIONS.md` | 결정 요약표. "이거 왜 이렇게 돼 있지?" 할 때 |
-| `docs/PRD.md` (v0.3) | 요구사항 R-01~R-24, 결정 D1~D20의 근거 |
+| `docs/PRD.md` (v0.3) | 요구사항 R-01~R-24, 결정 D1~D21의 근거 |
+| `docs/PRD-OUTSIDE-IN.md` (v0.1) | Outside-in(작업장 관측) 제품 요구사항 R-OI, 결정 D-OI. 코어를 바꾸지 않는 것만 (D21) |
 | `docs/TECH_STACK.md` (v1.0) | 기술 선택 T1~T16의 근거 |
 | `docs/CODE_TOUR.md` | 코드 읽는 순서 8정거장 + 증상→파일 표 |
 | `docs/ARCHITECTURE_MAP.html` | 구조 그림 7장(파이프라인·스레드/큐·의존 층·tick·고장 경로). 브라우저로 연다 |

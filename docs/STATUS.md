@@ -1,6 +1,6 @@
 # 현재 상태
 
-> 갱신: 2026-09-19 · 매 작업 세션 시작 시 이 문서를 먼저 본다.
+> 갱신: 2026-09-27 · 매 작업 세션 시작 시 이 문서를 먼저 본다.
 
 ## 한 줄
 
@@ -12,7 +12,8 @@
 
 | 영역 | 상태 |
 |---|---|
-| 의사결정 | **완료** — PRD v0.3(D1~D19), TECH_STACK v1.0(T1~T16) |
+| 의사결정 | **완료** — PRD v0.3(D1~D21), TECH_STACK v1.0(T1~T16) |
+| Outside-in | **PRD 초안** — `docs/PRD-OUTSIDE-IN.md` v0.1, 결정 D-OI-1~7, 열린 질문 5. 구현 미착수 |
 | 빌드·규칙 인프라 | **완료** — 워크스페이스, 툴체인 고정, clippy·cargo-deny 정책 |
 | CI 워크플로 | 파일 작성됨, `.github/workflows/`에 배치 필요 |
 | 문서 | README·CONTRIBUTING·BRIEF·DECISIONS·이 문서 |
