@@ -34,7 +34,7 @@
 | 후보 | 특징 |
 |---|---|
 | **stable + edition 2024** | 안정성, 툴 지원 완전. 에디션 2024의 강화된 unsafe 규칙 |
-| nightly | 일부 실험 기능(`#![feature]`). 사업화 제품에 부적합 |
+| nightly | 일부 실험 기능(`#![feature]`). 배포 제품에 부적합 |
 | 인증 툴체인(Ferrocene) | ISO 26262/IEC 61508 인증된 rustc 배포판. 유료. v1(비인증 자문 계층)에는 불필요, 포지셔닝 상향 시 검토 |
 
 **추천.** **stable, edition 2024, `rust-toolchain.toml`로 버전 고정**, MSRV = 고정 버전 - 2 마이너 정도로 문서화. 6개월마다 상향.
@@ -180,7 +180,7 @@
 | lint | `clippy::all` + `clippy::pedantic`(선별 allow) + `clippy::unwrap_used`, `expect_used`, `panic` → deny (핫패스 크레이트) |
 | 포맷 | `rustfmt` 기본 |
 | 의존성 정책 | **`cargo-deny`**(라이선스 허용 목록, 중복·yanked·advisory) + `cargo-audit` |
-| 공급망 | `Cargo.lock` 커밋, `cargo-vet` 또는 `cargo-crev`는 사업화 시점에 |
+| 공급망 | `Cargo.lock` 커밋, `cargo-vet` 또는 `cargo-crev`는 첫 외부 배포 시점에 |
 | unsafe 통계 | `cargo-geiger`로 의존성 unsafe 양 추적 |
 | 문서 | `#![warn(missing_docs)]` (`rsm-core` 공개 API) |
 
@@ -372,7 +372,7 @@ robot-safety-monitor/
 | D18 코딩 규칙 | **해결** — T10 |
 | D16 타겟 환경 | **해결** — x86_64(Linux/Windows) + aarch64 Linux. CI에 aarch64 상시 포함(`rsm-ml` 제외), 실기 검증 Phase 2 1회. MCU(`no_std`)는 대상 아님 |
 | D17 공개 여부·라이선스 | **해결** — 오픈소스 공개, **Apache-2.0 단독**, DCO, 공개 시점 v0.5. open-core는 지금 정하지 않음 |
-| D19 투입 시간·일정 | **해결** — 주당 10시간. v0.5 약 6개월, v1 누적 11~14개월 (PRD §8) |
+| D19 일정 | **해결** — 비공개 문서에서 관리. PRD §8은 범위와 순서만 담는다 |
 
 전건 확정으로 PRD 미결 사안은 남지 않으며, 후속 확인 항목(모델 선정·rclrs 재확인·ARM 실기·CLA 전환)은 PRD §9.2에 시점과 함께 정리되어 있다.
 
