@@ -88,11 +88,11 @@
 | 주기 타이머 | `std::thread::sleep` 기반 절대 시각 대기(`sleep_until` 유사 구현) / Linux `timerfd`(nix) | v1은 절대 시각 sleep, 지터 계측 후 필요 시 timerfd |
 | 그룹 간 큐 (1:1) | **`rtrb`** — 실시간 안전 SPSC 링버퍼(오디오 커뮤니티 검증, 할당 없음, wait-free) | 채택 |
 | 그룹 간 큐 (N:1, 여러 그룹 → Arbiter) | `crossbeam::ArrayQueue`(bounded MPMC) / `ringbuf` | SPSC를 그룹 수만큼 두고 Arbiter가 폴링 → `rtrb`만으로 통일 가능 |
-| 오버플로 정책 | drop-oldest vs `MonitorUnavailable` 승격 | 안전 관점 후자(PRD §10) |
+| 오버플로 정책 | 블로킹 / 조용히 버림 / 버리고 감시 가용성 강등 | 마지막 (PRD D23) |
 
 **추천.** `std::thread` + `thread-priority` + `rtrb`(모든 그룹 간 통신을 SPSC로 정규화). 큐 용량은 설정에서 고정.
 
-**결정.** **`std::thread` + `thread-priority` + `rtrb`.** 그룹당 OS 스레드 1개, 절대 시각 기준 `sleep_until` 루프(지터 부족 시 `timerfd`로 교체), 그룹마다 SPSC 큐 1개를 두고 Arbiter가 순회 폴링. tokio 미사용. 오버플로 정책은 PRD §10에서 Phase 1 중 확정.
+**결정.** **`std::thread` + `thread-priority` + `rtrb`.** 그룹당 OS 스레드 1개, 절대 시각 기준 `sleep_until` 루프(지터 부족 시 `timerfd`로 교체), 그룹마다 SPSC 큐 1개를 두고 Arbiter가 순회 폴링. tokio 미사용. 오버플로 정책은 PRD D23 — 들어오는 이벤트를 버리고(`rtrb` push 실패) 원자 카운터에 기록, Supervisor가 `availability`를 `Degraded`로 낮춘다.
 
 ---
 
@@ -140,9 +140,16 @@
 | 라이브러리 에러 | **`thiserror`**(enum 정의) / `snafu` | `thiserror` |
 | 바이너리 에러 | **`anyhow`** / `eyre` | `anyhow` |
 | 패닉 정책 | `panic = "unwind"` + `std::panic::catch_unwind` 경계 / `panic = "abort"` | **unwind + 모듈 tick마다 `catch_unwind`**. abort는 R-07과 양립 불가 |
-| 패닉 후 상태 | `AssertUnwindSafe` + 모듈 재생성(팩토리 재호출) | 모듈 상태를 버리고 재생성 — 오염 상태 재사용 금지 |
+| 패닉 후 상태 | 영구 `Faulted`(다시 부르지 않음) / 모듈 재생성(팩토리 재호출) | **영구 `Faulted`** — 오염 상태 재사용 금지는 "다시 부르지 않는 것"으로 달성된다 |
 
-**결정.** **`thiserror`(라이브러리) + `anyhow`(바이너리) + `panic = "unwind"` + 모듈 tick 단위 `catch_unwind` + 패닉 모듈 재생성.** 재시작 정책(즉시 / N회 후 영구 `Faulted`)은 설정 항목. fail-fast(즉시 프로세스 종료)는 외부 watchdog·프로세스 관리자가 전제되어야 하므로 v1 범위 밖 — 대신 PRD §10의 "Supervisor 자체 생존 탐지"를 Phase 1에서 함께 설계. `extern "C"` 경계(P2 R-19)에서는 `catch_unwind`가 선택이 아닌 필수(패닉이 C 스택을 통과하면 UB).
+**결정.** **`thiserror`(라이브러리) + `anyhow`(바이너리) + `panic = "unwind"` + 모듈 tick 단위 `catch_unwind` + 패닉 모듈은 영구 `Faulted`로 두고 이후 tick에서 건너뛴다.** 모듈 하나가 빠지면 Supervisor가 `availability`를 `Degraded`로 낮춘다. 재생성·재시작 정책(횟수 제한 + 백오프)은 P1(PRD R-25). fail-fast(즉시 프로세스 종료)는 외부 watchdog·프로세스 관리자가 전제되어야 하므로 v1 범위 밖 — Supervisor 자체의 생존은 PRD D24.
+
+> **2026-09-27 변경.** 원래 결정은 "패닉 모듈 재생성"이었으나 구현되지 않았고, 코드는
+> Phase 0부터 영구 `Faulted`로 동작해 왔다. 문서를 코드에 맞추되 이유를 남긴다.
+> 재생성을 기본으로 하면 (1) 곧바로 다시 패닉하는 루프가 생길 수 있고 (2) 상태를 잃은
+> 모듈이 TTL 동안 "위험 없음"을 보고할 수 있어 "침묵을 안전으로 읽지 않는다"는 원칙과
+> 부딪힌다. 반대로 일시적 패닉 한 번에 모듈을 영구히 잃는 가용성 손해가 있으므로,
+> 재시작은 횟수 제한·백오프와 재시작 직후 `Degraded` 유지를 갖춘 정책으로 R-25에서 다룬다. `extern "C"` 경계(P2 R-19)에서는 `catch_unwind`가 선택이 아닌 필수(패닉이 C 스택을 통과하면 UB).
 
 ---
 
@@ -345,7 +352,7 @@ robot-safety-monitor/
 | T5 | 스레드·큐 | **`std::thread` + `thread-priority` + `rtrb`**(전 구간 SPSC 정규화), tokio 미사용 |
 | T6 | 시간 | **자체 `Instant(u64 ns)` + `trait Clock`**, `MonotonicClock`·`VirtualClock`(v1), `RosClock`(Phase 3) |
 | T7 | 로깅·계측 | **3분리** — Sink `serde_json` / 진단 `tracing` / 계측 핫패스 고정 슬롯 → `metrics` |
-| T8 | 에러·패닉 | **`thiserror` + `anyhow` + unwind + 모듈 tick `catch_unwind` + 패닉 모듈 재생성** |
+| T8 | 에러·패닉 | **`thiserror` + `anyhow` + unwind + 모듈 tick `catch_unwind` + 패닉 모듈 영구 `Faulted`** (재시작 정책은 P1 R-25) |
 | T9 | 테스트 | **전체 채택** `proptest`·`insta`·`loom`·Miri·`criterion`·`llvm-cov`·할당 카운터, 도입은 단계별 |
 | T10 | 코딩 규칙 | core `forbid(unsafe_code)`, **`pedantic` 켬**, `indexing_slicing`은 핫패스 한정, `cargo-deny` 단일화 |
 | T11 | ML 런타임 | **ONNX + `ort`**, CPU 시작·CUDA feature, `ort-tract` 대체 여지. **모델 라이선스 검토 필수(AGPL 회피)** |

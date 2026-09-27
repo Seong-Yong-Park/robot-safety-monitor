@@ -30,6 +30,9 @@
 | D19 | 투입 시간 **주당 10시간** |
 | D20 | 위험 타입 이름은 **`<category>.<subject>.<condition>`**. 첫 토막은 `Category`와 일치, `condition`은 위반을 말함, **같은 이름 = Arbiter가 합치는 단위**. 모듈 `name`은 인스턴스("어디서")이며 위험 이름과 독립 |
 | D21 | **Outside-in을 같은 저장소에서 개발**, 권고 액션 필드(R-18)를 **P0로 승격**. 문서 경계: 코어 타입·계약을 바꾸면 `PRD.md`, 아니면 `PRD-OUTSIDE-IN.md` |
+| D22 | 신호 타입은 **고정 enum** (`Bool`/`Scalar`/`Distance`/`Vector`). 확장은 `Custom` variant (예약·미구현) |
+| D23 | 큐 오버플로는 **들어오는 이벤트를 버리고 `Degraded`**. 블로킹하지 않는다. `Unavailable`이 아니다 — 그룹은 돌고 있다 |
+| D24 | Supervisor 생존은 **Sink 주기 출력(`on_change_only: false`)을 heartbeat로.** 외부 watchdog은 R-21 |
 
 ## Outside-In 결정 (`PRD-OUTSIDE-IN.md` §7)
 
@@ -54,7 +57,7 @@
 | T5 | 스레드·큐 | `std::thread` + `thread-priority` + `rtrb`(전 구간 SPSC). **tokio 미사용** |
 | T6 | 시간 | 자체 `Instant(u64 ns)` newtype + `trait Clock`. `MonotonicClock` / `VirtualClock` / (Phase 3) `RosClock` |
 | T7 | 로깅·계측 | 3분리 — Sink `serde_json` / 진단 `tracing` / 계측 핫패스 고정 슬롯 → `metrics` |
-| T8 | 에러·패닉 | `thiserror` + `anyhow` + `panic = "unwind"` + 모듈 tick `catch_unwind` + 패닉 모듈 재생성 |
+| T8 | 에러·패닉 | `thiserror` + `anyhow` + `panic = "unwind"` + 모듈 tick `catch_unwind` + 패닉 모듈 **영구 `Faulted`** (재시작 정책은 P1 R-25. 2026-09-27 코드에 맞춰 변경) |
 | T9 | 테스트 | `proptest`·`insta`·`loom`·Miri·`criterion`·`llvm-cov`·할당 카운터 (단계별 도입) |
 | T10 | 코딩 규칙 | core `forbid(unsafe_code)` / `clippy::pedantic` / `unwrap`·`expect`·`panic` deny / `indexing_slicing`은 핫패스 한정 / `cargo-deny` |
 | T11 | ML 런타임 | ONNX + `ort`. CPU 시작, CUDA feature. `ort-tract` 대체 여지 |
@@ -64,15 +67,18 @@
 | T15 | CI | GitHub Actions 5잡. aarch64 상시(`rsm-ml` 제외), `cross` |
 | T16 | 문서·구조 | rustdoc + doctest. 가이드는 `docs/*.md`로 시작, mdBook은 Phase 2. 단일 리포 |
 
-## Phase 0에서 확정한 설계 세부 (PRD §10 열린 질문)
+## Phase 0에서 확정한 설계 세부 (옛 PRD §10 열린 질문)
 
-| 항목 | 결정 |
+**전부 PRD로 옮겼다.** 이 표는 한때 PRD를 거치지 않고 결정을 직접 담아 두 번째
+정본이 됐고, 그 사이 PRD §10에는 같은 항목이 "미정"으로 남아 있었다. 이제는 가리키기만 한다.
+
+| 항목 | 어디로 |
 |---|---|
-| 신호 타입 시스템 | 고정 enum(`Bool`/`Scalar`/`Vector`/`Distance`) + `Custom` 확장 구멍 |
-| 큐 오버플로 정책 | **`MonitorUnavailable` 승격** — 이벤트를 조용히 버리지 않는다 |
-| 위험 타입 네이밍 | **D20으로 승격.** 3단 계층 문자열, 런타임에는 인터닝된 `HazardTypeId` |
-| Supervisor 자체 생존 | v1은 **heartbeat Sink**. 프로세스 밖 감시는 R-21 영역 |
-| 실행 파일 | `rsm-cli` 크레이트 추가 (`run` 서브커맨드, 이후 `validate`·`replay`) |
+| 위험 타입 네이밍 | **D20** — 3단 계층 문자열 |
+| 신호 타입 시스템 | **D22** — 고정 enum. `Custom`은 예약·미구현 |
+| 큐 오버플로 정책 | **D23** — 들어오는 이벤트를 버리고 `Degraded` |
+| Supervisor 자체 생존 | **D24** — Sink 주기 출력이 heartbeat. Supervisor 스레드만 멈추는 경우는 못 잡음 |
+| 실행 파일 | **PRD §5.3** — `rsm-cli` (`run` / `check` / `list`) |
 
 ## Phase 0 실측에서 나온 결정
 

@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 |---|---|
 | 문서 버전 | v0.3 |
-| 작성일 | 2026-09-12 (v0.1 / v0.2) → 2026-09-15 (v0.3) → 2026-09-22 (D20 추가) → 2026-09-27 (D21 추가, R-18 P0 승격) |
+| 작성일 | 2026-09-12 (v0.1 / v0.2) → 2026-09-15 (v0.3) → 2026-09-22 (D20 추가) → 2026-09-27 (D21 추가, R-18 P0 승격 / D22~D24로 §10 비움, 코드와 어긋난 R-06·R-07 정정) |
 | 상태 | **의사결정 전건 확정.** 기술 스택은 `docs/TECH_STACK.md` v1.0 참조. §10 열린 질문 중 위험 타입 네이밍은 D20으로 확정. Outside-in 제품 요구사항은 `docs/PRD-OUTSIDE-IN.md` (D21) |
 | 용도 | 개인 프로젝트 개발 가이드 (설계 기준 문서) |
 | v0.3 변경 요약 | 잔여 사안 D13~D19 전부 확정(§9.1로 이동), **v0.5 중간 마일스톤 도입**으로 §8 일정 재구성, 주당 10시간 기준 공수 산정 추가, G4에 실행 플랫폼 caveat 명시 |
@@ -80,7 +80,7 @@ RSM은 **위험 감지 모듈을 표준 인터페이스로 규격화**하고, **
 - **Detector**: 하나의 위험 유형을 평가하는 최소 단위. `internal.*`(자체 상태), `external.*`(환경), `ml.*`(학습 모델 래퍼) 네임스페이스. 입력 신호 선언 → 주기 평가 → `HazardEvent` 발행.
 - **Arbiter**: 다수의 `HazardEvent`를 하나의 `SafetyState`로 융합. 정책 교체 가능.
 - **Sink**: `HazardEvent`/`SafetyState`/Supervisor 건강 상태를 외부로 내보내는 출력 어댑터.
-- **Supervisor**: 모듈 자체의 건강(주기 초과, 입력 스테일, 패닉)을 감시하고 `MonitorUnavailable`을 낸다. TTL 만료(이벤트 소멸)와는 **독립된 메커니즘** — 감시기가 죽었을 때 위험 이벤트가 조용히 사라지는 침묵 실패를 막는다.
+- **Supervisor**: 모듈 자체의 건강(주기 초과, 입력 스테일, 패닉)을 감시하고 감시 가용성(`MonitorAvailability`)을 판정해 `SafetyState.availability`에 싣는다. TTL 만료(이벤트 소멸)와는 **독립된 메커니즘** — 감시기가 죽었을 때 위험 이벤트가 조용히 사라지는 침묵 실패를 막는다.
 - **Clock**: 코어는 시계를 직접 호출하지 않고 `Clock` 트레이트 구현체를 주입받는다.
 
 ### 5.2 실행 모델 — 주기 그룹 (확정)
@@ -102,6 +102,7 @@ RSM은 **위험 감지 모듈을 표준 인터페이스로 규격화**하고, **
 | `rsm-ml` | 사전학습 모델 래퍼 Detector + 추론 런타임 바인딩 | `rsm-core` (feature flag로 선택 빌드) |
 | `rsm-ros2` | rclrs 기반 Source/Sink 어댑터, `rsm_msgs` 정의, 노드 실행 파일, ROS 시계 → `Clock` 구현 | `rsm-core`, `rsm-modules`, rclrs |
 | `rsm-tools` (Python) | 설정 검증, 리플레이 실행·비교, 결과 리포트 | CLI 경유 |
+| `rsm-cli` | 실행 파일 `rsm` — `run` / `check` / `list` 서브커맨드, JSONL Sink. 이후 `replay`가 여기 붙는다 | `rsm-core`, `rsm-modules` |
 | `rsm-vision` | Outside-in: 별도 프로세스의 인지 결과 수신 Source, 인지 건전성 Detector, 참조 인지 구현 (`docs/PRD-OUTSIDE-IN.md`) | `rsm-core` |
 | `rsm-command` | Outside-in: `SafetyState`와 권고 액션(R-18)을 내보내는 Sink. 명령은 발행하지 않는다 | `rsm-core` |
 
@@ -118,8 +119,8 @@ RSM은 **위험 감지 모듈을 표준 인터페이스로 규격화**하고, **
 | R-03 | **모듈 레지스트리**: 모듈은 이름으로 등록되고 설정에서 이름으로 참조된다 | 등록 = `(name, factory_fn)` 쌍. 신규 모듈 등록 시 `rsm-core` 수정 없음. 팩토리 시그니처는 P2 동적 로드와 호환 |
 | R-04 | **HazardEvent 스키마 단일화** | 필수 필드: `id`, `source_module`, `category`(internal/external/ml), `type`, `severity`(순서형: NONE/ADVISORY/WARNING/CRITICAL), `confidence`, `timestamp`, `evidence`, `ttl`. `evidence`는 평탄한 `(key, scalar)` 목록 — 향후 `#[repr(C)]` 미러 가능해야 함 |
 | R-05 | **Arbiter 기본 정책**: max-severity + TTL | 동일 `type`은 최신값으로 갱신; `ttl` 만료 시 비활성; 정책 트레이트로 교체 가능. TTL 기본값 = 모듈 주기의 2–3배 |
-| R-06 | **감시 불가 상태 명시**: 입력 스테일/모듈 패닉/주기 초과 시 `MonitorUnavailable` 발행 | Supervisor는 Detector 그룹과 독립 스레드; 침묵 상태가 NONE으로 해석되지 않음; `SafetyState`에 `monitor_availability` 필드 포함 |
-| R-07 | **모듈 고장 격리**: 한 모듈의 패닉/타임아웃이 다른 모듈과 파이프라인을 중단시키지 않는다 | `catch_unwind` 경계; 고장 모듈은 `FAULTED` 전이, 재시작 정책(설정) 적용; 다른 그룹·같은 그룹의 나머지 모듈 정상 동작 테스트 |
+| R-06 | **감시 불가 상태 명시**: 입력 스테일/모듈 패닉/주기 초과 시 감시 가용성을 낮춘다 | Supervisor는 Detector 그룹과 독립 스레드; 침묵 상태가 NONE으로 해석되지 않음; `SafetyState`에 `availability` 필드(`MonitorAvailability`: `Available`/`Degraded`/`Unavailable`) 포함 |
+| R-07 | **모듈 고장 격리**: 한 모듈의 패닉/타임아웃이 다른 모듈과 파이프라인을 중단시키지 않는다 | `catch_unwind` 경계; 고장 모듈은 `Faulted`로 전이해 **이후 tick에서 건너뛴다(재생성하지 않는다, T8)**. 재시작 정책은 P1(R-25); 다른 그룹·같은 그룹의 나머지 모듈 정상 동작 테스트 |
 | R-08 | **결정적 실행**: 주기 그룹 스케줄링, 초기화 이후 힙 할당 최소화 | 그룹별 tick 실행 시간·초과 횟수 계측 내장; `fast` 그룹 tick 경로에서 할당 0 (테스트로 검증) |
 | R-09 | **레퍼런스 모듈 세트** | internal: 관절 한계(위치/속도/토크), 배터리 저전압, 온도 임계, 통신 타임아웃 / external: 최소 거리(근접) 위반, 속도-거리 규칙 / **ml: 공개 사전학습 사람 검출 모델 래퍼 → 근접 위험** (모델 자체는 개발하지 않음) / Source: 파일 리플레이 1종 / Sink: JSON Lines, stdout |
 | R-10 | **시계 주입 + 리플레이 테스트** | 코어 내 `now()` 직접 호출 0건(lint/grep으로 검증); 가상 시계로 리플레이 시 결과가 실행 속도와 무관하게 동일; 레퍼런스 모듈 전부 리플레이 테스트 보유 |
@@ -135,6 +136,7 @@ RSM은 **위험 감지 모듈을 표준 인터페이스로 규격화**하고, **
 | R-14 | 이벤트 시각화/타임라인 |
 | R-15 | 외부 알림 Sink: 웹훅/MQTT |
 | R-16 | 설정 핫리로드 (파라미터만; 구조 변경 제외) |
+| R-25 | **모듈 재시작 정책** — 패닉한 모듈을 팩토리로 다시 만든다. 횟수 제한 + 백오프, 한도를 넘으면 영구 `Faulted`. 재시작 직후 TTL 동안은 그 모듈의 침묵을 "위험 없음"으로 읽지 않도록 `availability`를 `Degraded`로 유지한다 (T8) |
 
 ### 6.3 Future Considerations (P2) — 지금은 만들지 않지만 설계에서 막지 말 것
 
@@ -219,6 +221,9 @@ v0.5를 두는 이유: (1) G1의 핵심 주장("설정만 바꿔 다른 구성�
 | D19 | **투입 시간: 주당 10시간** | §8 공수·기간의 기준 |
 | D20 | **위험 타입 이름 규약: `<category>.<subject>.<condition>`** (예: `internal.joint.torque_limit`, `internal.battery.low`, `external.obstacle.min_distance`). (1) 첫 토막은 `Category`(`internal`/`external`/`ml`)와 일치한다. (2) `condition`은 값이 아니라 **위반**을 말한다 (`torque`가 아니라 `torque_limit`). (3) **이름이 같으면 Arbiter가 같은 위험으로 합친다** — 소비자가 따로 봐야 할 위험은 이름을 나누고(`internal.arm_l.torque_limit` / `internal.arm_r.torque_limit`), 같은 조건의 중복 관측자만 이름을 공유한다. 모듈 `name`은 **인스턴스("어디서", `front_lidar`)** 이며 위험 이름과 독립이다 | 설정·로그·ROS 토픽에서 같은 문자열을 쓰고(R-04), Arbiter 병합 키가 이 이름이므로(D4) "이름 = 병합 단위"를 규약으로 못 박아야 설정 실수가 조용한 덮어쓰기로 이어지지 않는다. 런타임에는 인터닝된 `HazardTypeId`라 이름 길이가 비용이 아니다. 접두어-Category 일치는 v0.5까지 관례로 두고 Phase 1에 `configure` 단계 기동 실패로 강제한다(D20-a) |
 | D21 | **Outside-in 제품을 같은 저장소에서 개발하고, 권고 액션 필드(R-18)를 P0로 승격한다.** 제품 요구사항은 `docs/PRD-OUTSIDE-IN.md`에 둔다. **문서 경계**: 코어(`rsm-core`)의 타입·계약을 바꾸는 요구사항은 이 문서에, 바꾸지 않는 outside-in 전용 요구사항은 `PRD-OUTSIDE-IN.md`에 | Outside-in의 파이프라인이 Source→Detector→Arbiter→Sink와 거의 1:1로 대응해 코어를 공유한다(`PRD-OUTSIDE-IN.md` §4.1). 권고 액션은 outside-in의 핵심 출력이지만 `SafetyState`를 바꾸므로 inside-out에도 적용되고, 따라서 이 문서의 요구사항이다. **권고이지 명령이 아니다** — §3 비목표(대응 명령의 직접 발행)와 D6(비인증 자문 계층)은 그대로 유지된다. 두 제품의 요구사항을 한 문서에 섞으면 "어느 제품의 요구사항인가"가 흐려지므로 코어 변경 여부로 경계를 긋는다 |
+| D22 | **신호 타입: 고정 enum** — `Bool` / `Scalar` / `Distance` / `Vector`. 사용자 정의 타입 등록은 두지 않는다. 확장이 필요하면 `Custom` variant로 한다 (**예약만, 미구현**) | enum이면 variant를 늘릴 때 `match`의 철저성 검사가 처리하지 않은 곳을 전부 빌드 에러로 드러낸다. 등록 메커니즘은 `Signal`을 `Copy`로 유지하기 어렵게 만들어 R-08(할당 0)과 부딪힌다. `Distance`를 `Scalar`와 나눈 것은 단위 검사를 타입으로 하기 위해서다 |
+| D23 | **큐 오버플로: 들어오는 이벤트를 버리고 `availability`를 `Degraded`로 낮춘다.** 블로킹하지 않는다 | 블로킹하면 1 kHz 그룹이 Arbiter 속도에 묶여 주기를 놓친다. 버린 사실은 원자 카운터로 남기고 Supervisor가 `Degraded`로 알린다 — 주기를 지키되 빠뜨린 것을 숨기지 않는다. **`Unavailable`이 아닌 이유**: 오버플로는 "일부를 못 봤다"이지 "감시가 멈췄다"가 아니다. 그룹은 계속 돈다. 조건이 이어지는 동안 매 tick 다시 발행하는 감지기라면 한 건의 유실은 다음 tick에 메워진다 |
+| D24 | **Supervisor 생존: v1은 Sink의 주기 출력을 heartbeat로 쓴다.** `sink.on_change_only: false`면 Arbiter가 매 주기 한 줄을 내보내고, 소비자는 그 줄이 끊긴 것으로 감시기의 이상을 안다. 프로세스 밖 감시(외부 watchdog)는 R-21 영역 | 감시기는 자기 죽음을 스스로 알릴 수 없다. 소비자 쪽에서 "출력이 끊겼다"를 보는 것이 가장 단순한 외부 감시다. **한계**: 프로세스·Arbiter의 죽음은 잡지만, Supervisor 스레드만 멈추고 Arbiter가 살아 있으면 heartbeat는 계속되고 `availability`가 마지막 값에 멈춘다. v1은 이 경우를 잡지 못한다 |
 
 ### 9.2 후속 확인 항목
 
@@ -233,11 +238,12 @@ v0.5를 두는 이유: (1) G1의 핵심 주장("설정만 바꿔 다른 구성�
 
 ## 10. 열린 질문 (설계 세부)
 
+현재 열린 질문 없음. 처음 네 건은 모두 확정해 §9.1로 옮겼다
+(위험 타입 네이밍 D20, 신호 타입 D22, 큐 오버플로 D23, Supervisor 생존 D24).
+새 질문은 이 표에 추가한다.
+
 | 질문 | 답변 시점 | 메모 |
 |---|---|---|
-| 신호 타입 시스템의 강도 — 고정 타입 세트(`Scalar/Vector/Pose/PointCloud/Image`) + 사용자 정의 타입 등록 | Phase 1 초기 | 등록 메커니즘을 R-03 레지스트리와 동일 구조로 |
-| 그룹 간 큐 용량·오버플로 정책 (drop-oldest vs 오버플로를 `MonitorUnavailable`로 승격) | Phase 1 | 안전 관점에서는 후자가 보수적 |
-| Supervisor 자체가 죽었을 때의 탐지 (외부 watchdog? ROS diagnostics?) | Phase 1 | v1은 프로세스 단위 heartbeat Sink로 충분할 수 있음 |
 
 ## 11. 용어
 
@@ -245,7 +251,7 @@ v0.5를 두는 이유: (1) G1의 핵심 주장("설정만 바꿔 다른 구성�
 |---|---|
 | HazardEvent | 하나의 Detector가 발행하는 단일 위험 관측. TTL 동안 유효한 "주장" |
 | SafetyState | Arbiter가 산출하는 종합 상태 (최고 심각도 + 활성 위험 목록 + 감시 가용성) |
-| MonitorUnavailable | 감시 기능 자체가 유효하지 않음을 알리는 이벤트 (입력 스테일·모듈 고장) |
+| MonitorAvailability | 감시 기능 자체가 얼마나 믿을 만한지 — `Available` / `Degraded` / `Unavailable`. 이벤트가 아니라 `SafetyState.availability`에 실리는 **상태 필드**다. `level`과 반드시 함께 읽는다 |
 | TTL | Time-To-Live. 이벤트 유효 시간. 갱신 없이 만료되면 비활성 |
 | 주기 그룹 | 같은 주기로 같은 스레드에서 순차 실행되는 모듈 집합 |
 | Clock | 코어가 주입받는 시간 소스 트레이트 (단조/가상) |
