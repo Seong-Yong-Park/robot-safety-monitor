@@ -1,12 +1,12 @@
 # 현재 상태
 
-> 갱신: 2026-09-27 · 매 작업 세션 시작 시 이 문서를 먼저 본다.
+> 갱신: 2026-11-02 · 매 작업 세션 시작 시 이 문서를 먼저 본다.
 
 ## 한 줄
 
-**Phase 0 구현 완료.** 설정 파일 하나로 파이프라인이 조립되어 돌고, 같은 바이너리가
-`demo-a.yaml`(팔)과 `demo-b.yaml`(이동로봇)을 각각 실행한다. 다음은 Phase 1
-(할당 0 검증, 지터 측정, ROS 2 어댑터 준비).
+**Phase 1 진행 중.** Phase 0(설정 하나로 조립되는 파이프라인, `demo-a`·`demo-b`)이
+끝났고, Phase 1 첫 항목인 **주기 준수 계측 수정**을 마쳤다. 다음은 할당 0 검증과
+지터 측정 하네스.
 
 ## 무엇이 되어 있나
 
@@ -18,10 +18,10 @@
 | CI 워크플로 | 파일 작성됨, `.github/workflows/`에 배치 필요 |
 | 문서 | README·CONTRIBUTING·BRIEF·DECISIONS·이 문서 |
 | git | 로컬 저장소 + remote 연결, Phase 0 커밋(`efa1901`)까지 push 완료 |
-| **rsm-core** | **완료** — 11개 모듈 전부 구현, 단위 테스트 34 + doctest 1 |
+| **rsm-core** | **완료** — 11개 모듈 전부 구현, 단위 테스트 45 + doctest 1 |
 | **rsm-modules** | **완료** — Source 3종 · Detector 4종, 단위 8 + 통합 3 |
 | **rsm-cli** | **완료** — `rsm run` / `rsm check` / `rsm list`, JSONL 출력 |
-| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, 테스트 46 통과 |
+| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, 테스트 57 통과 |
 
 ### rsm-core 모듈
 
@@ -36,7 +36,7 @@
 | `config.rs` | YAML 로드·검증·조립 (`PipelineConfig` → `BuiltPipeline`) |
 | `schedule.rs` | `GroupWorker`·`ArbiterWorker`·`QueueSink`·`Runtime`·`run()` |
 | `arbiter.rs` | `MaxSeverity` 융합 정책 |
-| `supervisor.rs` | `HealthRegistry`(원자변수), 그룹 스테일·오버플로·고장 판정 |
+| `supervisor.rs` | `HealthRegistry`(원자변수), 그룹 스테일·오버플로·고장 판정, 주기 통계(미스·시작 지연·작업 시간) |
 | `error.rs` | `ConfigError` |
 
 ### rsm-modules
@@ -58,7 +58,7 @@
 | 항목 | 확인 방법 | 결과 |
 |---|---|---|
 | 설정만으로 구성 변경 | `demo-a` / `demo-b`를 같은 바이너리로 실행 | **확인** — 코드 변경 0 |
-| 주기 그룹 2개 독립 동작 | demo-a의 `fast` 1 kHz + `normal` 100 Hz | **확인** — 1.5초에 1371 tick, overrun 0 |
+| 주기 그룹 2개 독립 동작 | demo-a의 `fast` 1 kHz + `normal` 100 Hz | **확인** — 둘 다 돈다. 단 주기는 못 지켰다(아래 실측). Phase 1에서 고침 |
 | 모듈 고장 격리 | `panic_probe`를 demo-b에 배치 | **확인** — 해당 모듈만 `Faulted`, 나머지 계속 동작 |
 | 감시 불가 명시 | `stalling` + `comm_timeout` | **확인** — `availability`가 `Degraded`, `comm_timeout` CRITICAL |
 | tick 경로 할당 0 | 전역 할당자 교체 후 카운터 확인 | **Phase 1** — 설계상 할당 없음, 계측 미구현 |
@@ -66,25 +66,49 @@
 
 ### 실측 (release 빌드, demo-a `fast` 그룹 = 1 kHz 설정)
 
+**Phase 0 (수정 전)**
+
 | 환경 | tick 작업 시간 | 실제 tick 간격 | 유효 주파수 |
 |---|---|---|---|
 | Linux (컨테이너) | 평균 375 ns · 최대 18 µs | 1.09 ms | 917 Hz |
+| WSL2 Ubuntu 24.04 | 평균 1.7 µs · 최대 48 µs | 1.25 ms | 801 Hz |
 | Windows 11 | 평균 1.6 µs · 최대 45 µs | **1.88 ms** | **533 Hz** |
+
+세 환경 모두 `overrun 0`이었다. 버그가 둘이었다.
+
+1. **스케줄러** — "예정 시각을 지났으면 예정 시각 = 지금"으로 위상을 되맞췄다.
+   `thread::sleep`은 항상 조금 늦게 깨므로 이 조건이 매 tick 발동했고, 늦잠만큼
+   주기가 늘었다. 그래서 늦잠이 큰 환경일수록 주파수가 낮았다.
+2. **계측** — `overran = elapsed > period`, 즉 작업 시간만 봤다. 작업은 수 µs라
+   주기를 절반밖에 못 지켜도 0이 나왔다.
+
+**Phase 1 (수정 후, 2026-11-02, WSL2 Ubuntu 24.04, 2초 × 3회)**
+
+| 실효 주파수 | 데드라인 미스 | 시작 지연 최대 · 평균 | 작업 시간 최대 · 평균 |
+|---|---|---|---|
+| 999.7 ~ 999.8 Hz | 0 · 1 · 0 / 2001 | 0.81 ~ 1.05 ms · 245 ~ 308 µs | 61 ~ 94 µs · 1.9 ~ 2.6 µs |
+
+demo-b(100 Hz)는 99.9 Hz, 미스 0. 주파수는 이제 맞는다. 놓친 칸은 건너뛰므로
+OS가 오래 안 깨워도 그 뒤 tick이 몰리지 않는다.
+
+**남은 문제: 시작 지연이 크다.** 평균 250~300 µs는 주기의 25~30%로, PRD §7의
+지터 목표(P99가 주기의 10% 이내)를 못 맞춘다. 2회차의 미스 1건은 OS가 1 ms 넘게
+스레드를 안 깨운 것이다. WSL2는 실시간 스케줄링이 부정확하다(TECH_STACK T1).
+공식 수치는 전용 Linux + `SCHED_FIFO`에서 다시 잰다. 그래도 크면 `timerfd`나
+마지막 수십 µs만 바쁜 대기(spin)하는 방식을 검토한다(TECH_STACK T5).
 
 **측정치일 뿐 WCET 보장이 아니다** (PRD G4 단서 참조).
 
-Windows는 `thread::sleep` 분해능 때문에 매 tick 약 0.9~1.6 ms가 밀린다.
+Windows는 `thread::sleep` 분해능이 약 1 ms라 시작 지연이 그만큼 생긴다.
 **Windows는 개발·CI 전용으로 확정**했으므로 이 수치는 결함이 아니다 (PRD D16).
 Windows에서 개발할 때는 `fast` 그룹 주기를 200 Hz 정도로 낮춰 쓴다.
 
-**단, 계측이 이것을 못 잡았다.** 두 환경 모두 `overrun 0`으로 나왔다.
-현재 `overran` 판정은 `elapsed > period`, 즉 **tick 작업 시간**만 본다.
-데드라인을 놓치는 것은 보지 않는다. Phase 1 첫 항목으로 고친다.
-
 ## 다음 (Phase 1 후보)
 
-- [ ] **주기 준수 계측 수정** — `overran`을 작업 시간이 아니라 **실제 tick 간격**
-      (직전 `started` 와의 차) 기준으로 판정. 지금은 주기를 절반밖에 못 지켜도 0이 나온다
+- [x] **주기 준수 계측 수정** — 데드라인 미스·시작 지연·실효 주파수로 나눠 기록.
+      스케줄러의 위상 밀림도 같이 고침 (2026-11-02)
+- [ ] 데드라인 미스를 `availability`에 반영 — 지금은 세기만 하고 `Degraded`로
+      낮추지 않는다(R-06). 몇 번·얼마 동안 놓치면 낮출지 정해야 한다
 - [ ] tick 경로 할당 0 계측 — 시험용 전역 할당자로 카운트
 - [ ] 지터 측정 하네스 — P50/P99/최대, 부하를 준 상태에서
 - [ ] `--duration-ms` 대신 Ctrl-C 처리 (시그널 핸들러 의존성 결정 필요)

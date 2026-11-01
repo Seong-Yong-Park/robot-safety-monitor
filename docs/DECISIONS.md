@@ -54,7 +54,7 @@
 | T2 | 툴체인 | stable + edition 2024, `rust-toolchain.toml`로 1.98.1 고정 |
 | T3 | 설정 포맷 | YAML + `serde_yaml_ng` + `schemars`. `deny_unknown_fields`. `serde_yml` 금지 |
 | T4 | 레지스트리 | 명시적 등록 함수. 팩토리 `fn(&Params) -> Result<Box<dyn Detector>>` 고정 |
-| T5 | 스레드·큐 | `std::thread` + `thread-priority` + `rtrb`(전 구간 SPSC). **tokio 미사용** |
+| T5 | 스레드·큐 | `std::thread` + `thread-priority` + `rtrb`(전 구간 SPSC). **tokio 미사용**. 놓친 주기는 건너뛰고 위상 유지 |
 | T6 | 시간 | 자체 `Instant(u64 ns)` newtype + `trait Clock`. `MonotonicClock` / `VirtualClock` / (Phase 3) `RosClock` |
 | T7 | 로깅·계측 | 3분리 — Sink `serde_json` / 진단 `tracing` / 계측 핫패스 고정 슬롯 → `metrics` |
 | T8 | 에러·패닉 | `thiserror` + `anyhow` + `panic = "unwind"` + 모듈 tick `catch_unwind` + 패닉 모듈 **영구 `Faulted`** (재시작 정책은 P1 R-25. 2026-09-27 코드에 맞춰 변경) |
@@ -85,7 +85,8 @@
 | 항목 | 결정 |
 |---|---|
 | Windows의 위치 | **개발·CI 전용.** 주기 성능(G4/R-03)의 판정 대상이 아니다. 실측에서 매 tick 1~1.6 ms가 밀려 1 kHz 설정이 533 Hz로 돌았다. `timeBeginPeriod(1)`은 `unsafe`라 코어에 들이지 않는다 (PRD D16 / D16-b) |
-| 주기 준수 계측 | 현재 `overrun`은 **tick 작업 시간**만 본다. 데드라인을 놓쳐도 0으로 나온다. Phase 1에서 **실제 tick 간격**(직전 tick과의 차) 기준으로 바꾼다 |
+| 주기 준수 계측 | **반영됨(Phase 1).** `overrun`(작업 시간 > 주기)을 없애고 셋으로 나눴다 — **데드라인 미스**(`ended > release + period`), **시작 지연**(`started − release`, 최대·평균), **작업 시간**. 여기에 첫·마지막 tick 간격으로 잰 **실효 주파수**를 더했다. 원래 계획한 "직전 tick과의 간격"은 쓰지 않았다 — 위상이 밀리는 버그가 있으면 간격이 고르게 길어질 뿐이라 예정 시각(release)과 비교해야 보인다 |
+| 주기 스케줄러 | 실측 중 계측만이 아니라 **스케줄러 자체**도 틀렸음이 드러났다. "예정 시각을 지났으면 예정 시각 = 지금"이 `sleep` 늦잠 때문에 매 tick 발동해 주기가 늘어났다. 놓친 주기는 건너뛰고 위상은 유지하도록 바꿨다 (TECH_STACK T5). Arbiter·Supervisor 루프도 같은 함수를 쓴다 |
 
 ### 여기서 파생된 제약 하나
 

@@ -267,7 +267,35 @@ impl Runtime {
     }
 }
 
-/// 절대 데드라인 기준으로 잰다. 한 tick이 늦어도 다음 데드라인이 밀리지 않는다.
+/// 다음 tick 을 시작할 예정 시각(release)을 정한다.
+///
+/// 결과는 항상 `release + k·period` (k ≥ 1) 격자 위에 있다. 즉 위상이 유지된다.
+///
+/// - 조금 늦었으면(한 주기 안) 다음 칸을 그대로 쓴다. 이미 지났으면 곧바로 시작한다.
+/// - 한 주기 이상 통째로 놓쳤으면 놓친 칸은 **건너뛰고**, 지금 시각 바로 앞의 칸을 쓴다.
+///   밀린 tick 을 몰아서 돌리면(따라잡기) 늦은 뒤에 부하가 몰려 더 나빠진다.
+///
+/// 어느 경우든 시작 지연은 한 주기 미만이다.
+///
+/// 예전 코드는 "예정 시각을 지났으면 예정 시각 = 지금"으로 위상을 되맞췄다.
+/// `thread::sleep`은 항상 조금 늦게 깨므로 이 조건이 매 tick 발동했고, 그만큼
+/// 주기가 길어졌다(1 kHz 설정이 Linux 917 Hz, Windows 533 Hz).
+fn next_release(release: Instant, now: Instant, period: Duration) -> Instant {
+    let next = release + period;
+    if now < next + period {
+        return next;
+    }
+    let skipped = (now - next)
+        .as_nanos()
+        .checked_div(period.as_nanos())
+        .unwrap_or(0);
+    if skipped == 0 {
+        return now; // 주기 0 — 격자가 없으니 지금 바로
+    }
+    next + period * skipped
+}
+
+/// 절대 시각까지 잔다. 이미 지났으면 바로 돌아온다.
 fn sleep_until(clock: &dyn Clock, deadline: Instant) {
     let now = clock.now();
     if deadline > now {
@@ -337,15 +365,11 @@ pub fn run(
         let h = thread::Builder::new()
             .name("rsm-arbiter".to_owned())
             .spawn(move || {
-                let mut deadline = clock.now();
+                let mut release = clock.now();
                 while !stop.load(Ordering::Relaxed) {
                     arbiter.tick(clock.now(), health.availability());
-                    deadline += arbiter_period;
-                    sleep_until(&*clock, deadline);
-                    let now = clock.now();
-                    if deadline < now {
-                        deadline = now;
-                    }
+                    release = next_release(release, clock.now(), arbiter_period);
+                    sleep_until(&*clock, release);
                 }
             });
         if let Ok(h) = h {
@@ -360,15 +384,11 @@ pub fn run(
         let h = thread::Builder::new()
             .name("rsm-supervisor".to_owned())
             .spawn(move || {
-                let mut deadline = clock.now();
+                let mut release = clock.now();
                 while !stop.load(Ordering::Relaxed) {
                     health.scan(clock.now(), group_stale_after);
-                    deadline += supervisor_period;
-                    sleep_until(&*clock, deadline);
-                    let now = clock.now();
-                    if deadline < now {
-                        deadline = now;
-                    }
+                    release = next_release(release, clock.now(), supervisor_period);
+                    sleep_until(&*clock, release);
                 }
             });
         if let Ok(h) = h {
@@ -392,24 +412,17 @@ fn group_loop(
     stop: &AtomicBool,
 ) {
     let period = worker.period();
-    let mut deadline = clock.now();
+    // 이 tick 이 시작하기로 예정된 시각. 데드라인은 `release + period`다.
+    let mut release = clock.now();
 
     while !stop.load(Ordering::Relaxed) {
         let started = clock.now();
         worker.tick(started, health, &mut out);
         let ended = clock.now();
-        let elapsed = ended - started;
-        health.record_group_tick(index, started, elapsed, elapsed > period);
+        health.record_group_tick(index, release, started, ended, period);
 
-        deadline += period;
-        sleep_until(clock, deadline);
-
-        // 데드라인을 이미 지나쳤으면 밀린 주기를 따라잡으려 하지 않고 위상을
-        // 현재로 되맞춘다. 따라잡기를 하면 늦은 뒤에 tick이 몰아쳐 더 나빠진다.
-        let now = clock.now();
-        if deadline < now {
-            deadline = now;
-        }
+        release = next_release(release, ended, period);
+        sleep_until(clock, release);
     }
 }
 
@@ -420,7 +433,7 @@ fn group_loop(
     reason = "in tests, a failed assertion is the diagnostic"
 )]
 mod tests {
-    use super::{GroupWorker, VecSink};
+    use super::{GroupWorker, VecSink, next_release};
     use crate::config::GroupPlan;
     use crate::error::ConfigError;
     use crate::event::{Category, HazardEvent, HazardTypeId, ModuleId, Severity};
@@ -596,5 +609,58 @@ mod tests {
 
         assert_eq!(health.module_health(ModuleId(0)), Health::Faulted);
         assert_eq!(out.events.len(), 1);
+    }
+
+    // ── next_release: 시각 계산만 떼어 냈으므로 스레드 없이 시험한다 ──────────
+
+    const P: Duration = Duration::from_micros(1_000);
+
+    fn us(v: u64) -> Instant {
+        Instant::from_nanos(v * 1_000)
+    }
+
+    #[test]
+    fn on_time_tick_advances_one_period() {
+        assert_eq!(next_release(us(0), us(10), P), us(1_000));
+    }
+
+    #[test]
+    fn oversleeping_does_not_shift_the_phase() {
+        // sleep 이 60 µs 늦게 깼다. 예전 코드는 여기서 예정 시각을 1_060 으로 옮겼고,
+        // 그 오차가 매 tick 쌓여 주기가 길어졌다.
+        let r1 = next_release(us(0), us(10), P);
+        let r2 = next_release(r1, us(1_060 + 10), P);
+        assert_eq!(r2, us(2_000));
+    }
+
+    #[test]
+    fn slightly_late_tick_starts_immediately_on_the_same_grid() {
+        // 다음 칸(1_000)을 이미 지났지만 한 주기 안이다 → 그 칸을 그대로 쓴다
+        assert_eq!(next_release(us(0), us(1_400), P), us(1_000));
+    }
+
+    #[test]
+    fn whole_missed_periods_are_skipped_not_replayed() {
+        // 3.5 주기 동안 멈췄다. 놓친 칸(1_000, 2_000)은 건너뛰고 3_000 을 쓴다.
+        assert_eq!(next_release(us(0), us(3_500), P), us(3_000));
+    }
+
+    #[test]
+    fn release_always_stays_on_the_grid() {
+        let mut release = us(0);
+        for now in [10, 1_070, 2_950, 7_200, 7_999, 8_000, 12_345] {
+            release = next_release(release, us(now), P);
+            assert_eq!(
+                release.as_nanos() % P.as_nanos(),
+                0,
+                "off grid at now={now}"
+            );
+            assert!(us(now) < release + P, "lateness must stay under one period");
+        }
+    }
+
+    #[test]
+    fn zero_period_does_not_divide_by_zero() {
+        assert_eq!(next_release(us(5), us(9), Duration::ZERO), us(9));
     }
 }

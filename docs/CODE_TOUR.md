@@ -158,18 +158,38 @@ for detector in detectors: detector.tick(now, &bus, out)
 3. **각 호출이 `catch_unwind`로 감싸여 있다** — 모듈이 패닉해도 그 모듈만
    `Faulted`로 빠지고 다음 tick부터 건너뛴다. 나머지는 계속 돈다.
 
-`group_loop`는 **절대 데드라인** 방식이다. `deadline += period`로 다음 시각을
-정하고 그때까지 잔다. `deadline = now + period`로 하면 매 tick마다 실행 시간이
-누적되어 주기가 밀린다. 이미 지나쳤으면 밀린 만큼 따라잡지 않고 위상을
-현재로 맞춘다(따라잡기를 하면 늦은 뒤에 tick이 몰아쳐 더 나빠진다).
+`group_loop`는 **절대 시각** 방식이다. 다음 tick의 예정 시각(`release`)을
+`release + period`로 정하고 그때까지 잔다. `now + period`로 하면 매 tick마다 실행
+시간과 `sleep` 늦잠이 누적되어 주기가 밀린다. 계산은 순수 함수 `next_release`에
+있어 스레드 없이 시험한다.
+
+- 조금 늦었으면(한 주기 안) 다음 칸을 그대로 쓴다 — **위상이 유지된다.**
+- 한 주기 이상 통째로 놓쳤으면 놓친 칸은 **건너뛴다.** 따라잡기를 하면 늦은
+  뒤에 tick이 몰아쳐 더 나빠진다.
+
+예전에는 "지났으면 예정 시각 = 지금"으로 위상을 되맞췄다. `thread::sleep`은
+항상 조금 늦게 깨므로 이 조건이 **매 tick** 발동했고, 1 kHz 설정이 800~900 Hz로
+돌았다. 임베디드로 치면 타이머 인터럽트에서 비교 레지스터를 `CNT + period`로
+다시 쓰는 것과 같다 — `CCR += period`로 써야 ISR 진입 지연이 쌓이지 않는다.
+
+주기 통계는 셋으로 나눠 기록한다(`supervisor.rs`의 `GroupStats`).
+
+| 지표 | 정의 | 무엇을 보나 |
+|---|---|---|
+| 데드라인 미스 | `ended > release + period` | 다음 예정 시각까지 못 끝냄 |
+| 시작 지연 | `started − release` | OS가 얼마나 늦게 깨웠나 (지터) |
+| 작업 시간 | `ended − started` | 모듈들이 실제로 쓴 시간 |
+
+작업 시간만 보면 주기를 절반밖에 못 지켜도 문제가 안 보인다(Phase 0의 실수).
 
 `QueueSink`도 본다. **큐가 가득 차면 이벤트를 버린다.** 여기서 블로킹하면
 1 kHz 그룹이 Arbiter 속도에 묶인다. 대신 오버플로를 기록하고 Supervisor가
 `Degraded`로 알린다 — 주기를 지키되 "빠뜨린 게 있다"는 사실은 숨기지 않는다.
 
 > **증상 → 여기**: 주기가 안 맞는다 / 지터가 크다 / 이벤트가 새는 것 같다 →
-> `schedule.rs`. `rsm run`이 끝날 때 stderr에 찍는 `tick / overrun / overflow /
-> max / mean`이 첫 단서다.
+> `schedule.rs`. `rsm run`이 끝날 때 stderr에 찍는 요약(`tick · Hz · miss ·
+> late · work · overflow`)이 첫 단서다. 설정 주파수와 `Hz`가 다르면 스케줄러,
+> `late`가 크면 OS, `work`가 크면 모듈을 의심한다.
 
 ---
 

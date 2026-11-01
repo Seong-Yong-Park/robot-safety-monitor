@@ -65,27 +65,59 @@ struct ModuleSlot {
 /// 그룹 하나의 실행 통계. `fast` tick 경로에서 쓰이므로 원자 연산만 쓴다.
 #[derive(Debug, Default)]
 struct GroupSlot {
+    first_tick_ns: AtomicU64,
     last_tick_ns: AtomicU64,
     ticks: AtomicU64,
-    overruns: AtomicU64,
+    misses: AtomicU64,
     overflows: AtomicU64,
-    max_tick_ns: AtomicU64,
-    sum_tick_ns: AtomicU64,
+    max_work_ns: AtomicU64,
+    sum_work_ns: AtomicU64,
+    max_late_ns: AtomicU64,
+    sum_late_ns: AtomicU64,
 }
 
 /// 그룹 하나의 통계 스냅샷. 종료 시 요약 출력에 쓴다.
+///
+/// 시간 지표가 셋으로 나뉜다. 작업 시간만 보면 주기를 절반밖에 못 지켜도
+/// 문제가 안 보이기 때문이다(Phase 0 실측).
+///
+/// | 지표 | 뜻 |
+/// |---|---|
+/// | 작업 시간 (work) | `ended − started` — 모듈들이 실제로 쓴 시간 |
+/// | 시작 지연 (late) | `started − release` — 예정 시각보다 늦게 깬 정도 (지터) |
+/// | 데드라인 미스 (miss) | `ended > release + period` — 다음 예정 시각까지 못 끝냄 |
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GroupStats {
     /// 지금까지 실행한 tick 수.
     pub ticks: u64,
-    /// 주기를 넘긴 tick 수.
-    pub overruns: u64,
+    /// 데드라인을 놓친 tick 수.
+    pub misses: u64,
     /// 큐가 가득 차 버려진 이벤트 수.
     pub overflows: u64,
-    /// 가장 오래 걸린 tick(ns).
-    pub max_tick_ns: u64,
-    /// 평균 tick 실행 시간(ns).
-    pub mean_tick_ns: u64,
+    /// 가장 긴 작업 시간(ns).
+    pub max_work_ns: u64,
+    /// 평균 작업 시간(ns).
+    pub mean_work_ns: u64,
+    /// 가장 큰 시작 지연(ns).
+    pub max_late_ns: u64,
+    /// 평균 시작 지연(ns).
+    pub mean_late_ns: u64,
+    /// 첫 tick 과 마지막 tick 의 시작 시각 차(ns). 실효 주파수 계산에 쓴다.
+    pub span_ns: u64,
+}
+
+impl GroupStats {
+    /// 실제로 돈 주파수(mHz). 첫 tick 과 마지막 tick 사이의 간격 수로 센다.
+    ///
+    /// 설정한 주파수와 다르면 tick 을 건너뛰었다는 뜻이다. 부동소수점 대신
+    /// 밀리헤르츠 정수로 돌려준다. tick 이 둘 미만이면 0.
+    pub fn effective_millihertz(&self) -> u64 {
+        let intervals = u128::from(self.ticks.saturating_sub(1));
+        let mhz = (intervals * 1_000_000_000_000)
+            .checked_div(u128::from(self.span_ns))
+            .unwrap_or(0);
+        u64::try_from(mhz).unwrap_or(u64::MAX)
+    }
 }
 
 /// 모듈·그룹의 건강을 모아 두는 공유 표.
@@ -146,17 +178,36 @@ impl HealthRegistry {
     }
 
     /// 그룹이 tick 을 마쳤음을 기록한다. `fast` 경로에서 불리므로 원자 연산만 한다.
-    pub fn record_group_tick(&self, group: usize, at: Instant, elapsed: Duration, overran: bool) {
+    ///
+    /// `release`는 이 tick 이 시작하기로 예정된 시각, `started`·`ended`는 실제로
+    /// 시작하고 끝난 시각이다. 지표의 정의는 [`GroupStats`]에 있고, 판정은 여기
+    /// 한 곳에서만 한다.
+    pub fn record_group_tick(
+        &self,
+        group: usize,
+        release: Instant,
+        started: Instant,
+        ended: Instant,
+        period: Duration,
+    ) {
         let Some(g) = self.groups.get(group) else {
             return;
         };
-        let ns = elapsed.as_nanos();
-        g.last_tick_ns.store(at.as_nanos(), Ordering::Release);
+        let work = (ended - started).as_nanos();
+        let late = (started - release).as_nanos();
+
+        // 쓰는 스레드는 그룹 스레드 하나뿐이라, 이전 값이 0 이면 첫 tick 이다.
+        if g.ticks.load(Ordering::Relaxed) == 0 {
+            g.first_tick_ns.store(started.as_nanos(), Ordering::Relaxed);
+        }
+        g.last_tick_ns.store(started.as_nanos(), Ordering::Release);
         g.ticks.fetch_add(1, Ordering::Relaxed);
-        g.sum_tick_ns.fetch_add(ns, Ordering::Relaxed);
-        g.max_tick_ns.fetch_max(ns, Ordering::Relaxed);
-        if overran {
-            g.overruns.fetch_add(1, Ordering::Relaxed);
+        g.sum_work_ns.fetch_add(work, Ordering::Relaxed);
+        g.max_work_ns.fetch_max(work, Ordering::Relaxed);
+        g.sum_late_ns.fetch_add(late, Ordering::Relaxed);
+        g.max_late_ns.fetch_max(late, Ordering::Relaxed);
+        if ended > release + period {
+            g.misses.fetch_add(1, Ordering::Relaxed);
         }
     }
 
@@ -176,13 +227,25 @@ impl HealthRegistry {
             return GroupStats::default();
         };
         let ticks = g.ticks.load(Ordering::Relaxed);
-        let sum = g.sum_tick_ns.load(Ordering::Relaxed);
+        let first = Instant::from_nanos(g.first_tick_ns.load(Ordering::Relaxed));
+        let last = Instant::from_nanos(g.last_tick_ns.load(Ordering::Acquire));
         GroupStats {
             ticks,
-            overruns: g.overruns.load(Ordering::Relaxed),
+            misses: g.misses.load(Ordering::Relaxed),
             overflows: g.overflows.load(Ordering::Relaxed),
-            max_tick_ns: g.max_tick_ns.load(Ordering::Relaxed),
-            mean_tick_ns: sum.checked_div(ticks).unwrap_or(0),
+            max_work_ns: g.max_work_ns.load(Ordering::Relaxed),
+            mean_work_ns: g
+                .sum_work_ns
+                .load(Ordering::Relaxed)
+                .checked_div(ticks)
+                .unwrap_or(0),
+            max_late_ns: g.max_late_ns.load(Ordering::Relaxed),
+            mean_late_ns: g
+                .sum_late_ns
+                .load(Ordering::Relaxed)
+                .checked_div(ticks)
+                .unwrap_or(0),
+            span_ns: (last - first).as_nanos(),
         }
     }
 
@@ -253,11 +316,35 @@ mod tests {
     use crate::time::{Duration, Instant};
 
     const STALE: Duration = Duration::from_millis(100);
+    const PERIOD: Duration = Duration::from_micros(1_000);
+
+    /// 시각 0 에 예정대로 시작해 10 ns 만에 끝난 tick 하나.
+    fn ok_tick(h: &HealthRegistry) {
+        h.record_group_tick(
+            0,
+            Instant::ZERO,
+            Instant::ZERO,
+            Instant::from_nanos(10),
+            PERIOD,
+        );
+    }
+
+    /// 예정 시각 `release_us`, 실제 시작 `started_us`, 작업 시간 `work_us` (모두 µs).
+    fn tick_us(h: &HealthRegistry, release_us: u64, started_us: u64, work_us: u64) {
+        let us = |v: u64| Instant::from_nanos(v * 1_000);
+        h.record_group_tick(
+            0,
+            us(release_us),
+            us(started_us),
+            us(started_us + work_us),
+            PERIOD,
+        );
+    }
 
     #[test]
     fn healthy_pipeline_is_available() {
         let h = HealthRegistry::new(2, 1);
-        h.record_group_tick(0, Instant::from_nanos(0), Duration::from_nanos(10), false);
+        ok_tick(&h);
         assert_eq!(
             h.scan(Instant::from_nanos(1_000), STALE),
             MonitorAvailability::Available
@@ -267,7 +354,7 @@ mod tests {
     #[test]
     fn module_panic_degrades_but_does_not_stop_the_pipeline() {
         let h = HealthRegistry::new(2, 1);
-        h.record_group_tick(0, Instant::from_nanos(0), Duration::from_nanos(10), false);
+        ok_tick(&h);
         h.record_fault(ModuleId(1));
 
         assert_eq!(
@@ -281,7 +368,7 @@ mod tests {
     #[test]
     fn stopped_group_makes_monitoring_unavailable() {
         let h = HealthRegistry::new(1, 1);
-        h.record_group_tick(0, Instant::from_nanos(0), Duration::from_nanos(10), false);
+        ok_tick(&h);
         // 100ms 를 넘겨 멈춰 있다
         let later = Instant::from_nanos(200_000_000);
         assert_eq!(h.scan(later, STALE), MonitorAvailability::Unavailable);
@@ -290,7 +377,7 @@ mod tests {
     #[test]
     fn dropped_events_degrade_availability() {
         let h = HealthRegistry::new(1, 1);
-        h.record_group_tick(0, Instant::from_nanos(0), Duration::from_nanos(10), false);
+        ok_tick(&h);
         h.record_overflow(0);
         assert_eq!(
             h.scan(Instant::from_nanos(1_000), STALE),
@@ -309,14 +396,58 @@ mod tests {
     }
 
     #[test]
-    fn stats_accumulate_mean_and_max() {
+    fn stats_separate_work_lateness_and_misses() {
         let h = HealthRegistry::new(0, 1);
-        h.record_group_tick(0, Instant::ZERO, Duration::from_nanos(10), false);
-        h.record_group_tick(0, Instant::ZERO, Duration::from_nanos(30), true);
+        tick_us(&h, 0, 0, 10); //        예정대로 시작
+        tick_us(&h, 1_000, 1_060, 30); // 60 µs 늦게 깼지만 데드라인(2_000) 안에 끝남
         let s = h.group_stats(0);
         assert_eq!(s.ticks, 2);
-        assert_eq!(s.overruns, 1);
-        assert_eq!(s.max_tick_ns, 30);
-        assert_eq!(s.mean_tick_ns, 20);
+        assert_eq!(s.misses, 0);
+        assert_eq!(s.max_work_ns, 30_000);
+        assert_eq!(s.mean_work_ns, 20_000);
+        assert_eq!(s.max_late_ns, 60_000);
+        assert_eq!(s.mean_late_ns, 30_000);
+    }
+
+    #[test]
+    fn short_work_still_misses_when_it_starts_too_late() {
+        // 작업은 10 µs 로 짧다. 예전 판정(작업 시간 > 주기)은 이것을 못 봤다.
+        let h = HealthRegistry::new(0, 1);
+        tick_us(&h, 1_000, 1_995, 10); // 끝난 시각 2_005 > 데드라인 2_000
+        assert_eq!(h.group_stats(0).misses, 1);
+    }
+
+    #[test]
+    fn ending_exactly_on_the_deadline_is_not_a_miss() {
+        let h = HealthRegistry::new(0, 1);
+        tick_us(&h, 0, 0, 1_000);
+        assert_eq!(h.group_stats(0).misses, 0);
+    }
+
+    #[test]
+    fn effective_frequency_counts_intervals_between_first_and_last_tick() {
+        let h = HealthRegistry::new(0, 1);
+        for k in 0..=1_000 {
+            tick_us(&h, k * 1_000, k * 1_000, 5);
+        }
+        // 1001 tick = 간격 1000 개, 1 초 → 1000 Hz
+        assert_eq!(h.group_stats(0).effective_millihertz(), 1_000_000);
+    }
+
+    #[test]
+    fn effective_frequency_reveals_skipped_ticks() {
+        let h = HealthRegistry::new(0, 1);
+        for k in 0..=500 {
+            tick_us(&h, k * 2_000, k * 2_000, 5); // 1 kHz 설정인데 두 칸마다 한 번
+        }
+        assert_eq!(h.group_stats(0).effective_millihertz(), 500_000);
+    }
+
+    #[test]
+    fn effective_frequency_needs_two_ticks() {
+        let h = HealthRegistry::new(0, 1);
+        assert_eq!(h.group_stats(0).effective_millihertz(), 0);
+        ok_tick(&h);
+        assert_eq!(h.group_stats(0).effective_millihertz(), 0);
     }
 }

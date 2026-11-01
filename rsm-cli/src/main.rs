@@ -108,10 +108,22 @@ fn cmd_run(path: &str, duration_ms: u64) -> Result<(), String> {
     let stats = rt.health().group_stats(0);
     rt.join();
     eprintln!(
-        "[rsm] group0 tick {} · overrun {} · overflow {} · max {} ns · mean {} ns",
-        stats.ticks, stats.overruns, stats.overflows, stats.max_tick_ns, stats.mean_tick_ns
+        "[rsm] group0 tick {} · {} Hz · miss {} · late max {} µs mean {} µs · work max {} µs mean {} µs · overflow {}",
+        stats.ticks,
+        one_decimal(stats.effective_millihertz()),
+        stats.misses,
+        one_decimal(stats.max_late_ns),
+        one_decimal(stats.mean_late_ns),
+        one_decimal(stats.max_work_ns),
+        one_decimal(stats.mean_work_ns),
+        stats.overflows,
     );
     Ok(())
+}
+
+/// 1/1000 단위 정수를 소수 한 자리로 찍는다 (ns → µs, mHz → Hz).
+fn one_decimal(milli: u64) -> String {
+    format!("{}.{}", milli / 1_000, milli % 1_000 / 100)
 }
 
 fn cmd_list() {
