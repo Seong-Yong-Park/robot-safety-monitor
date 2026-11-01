@@ -226,8 +226,15 @@ for detector in detectors: detector.tick(now, &bus, out)
 | 조건 | 결과 |
 |---|---|
 | 어떤 그룹이 `group_stale_after`보다 오래 tick을 안 했다 | `Unavailable` |
-| 큐 오버플로가 있었다 / 고장난 모듈이 있다 | `Degraded` |
+| 큐 오버플로가 있었다 / 고장난 모듈이 있다 | `Degraded` (회복 없음) |
+| 직전 scan 이후 데드라인 미스가 새로 났다 | `Degraded` (깨끗한 구간 하나면 회복) |
 | 첫 tick 전 | 판정하지 않음 |
+
+미스만 회복하는 이유(PRD D25). 미스 판정은 매 scan마다 "그 구간에 미스가 있었느냐"를
+새로 본다. 워치독 창(window)과 같다 — 래치된 고장 플래그가 아니다. 횟수로 보지 않는
+이유는, 스케줄러가 놓친 칸을 건너뛰므로 50 ms 공백도 미스 1건이기 때문이다.
+직전에 본 미스 수(`misses_seen`)는 Supervisor만 쓴다. 그룹 스레드의 fast 경로에는
+아무것도 더해지지 않는다.
 
 **모든 필드가 원자 변수다.** Supervisor는 큐를 쓰지 않는다. 그룹 스레드가 tick
 끝에 카운터를 올리고, Supervisor가 주기적으로 읽는다. 큐를 쓰면 큐가 막혔을 때
@@ -238,6 +245,7 @@ Supervisor는 "감시기가 못 보고 있다". 둘 다 있어야 침묵이 안�
 
 > **증상 → 여기**: `availability`가 계속 `Degraded`다 / 기대와 다르게 `Available`
 > 이다 → `scan`의 임계값과 `demo-*.yaml`의 `group_stale_after_ms`.
+> `Degraded`가 깜빡인다 → 데드라인 미스다. `rsm run` 요약의 `miss`·`late`를 본다.
 
 ---
 

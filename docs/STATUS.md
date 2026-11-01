@@ -12,16 +12,16 @@
 
 | 영역 | 상태 |
 |---|---|
-| 의사결정 | **완료** — PRD v0.3(D1~D24), TECH_STACK v1.0(T1~T16) |
+| 의사결정 | **완료** — PRD v0.3(D1~D25), TECH_STACK v1.0(T1~T16). 열린 질문 1(PRD §10 Q-1) |
 | Outside-in | **PRD 초안** — `docs/PRD-OUTSIDE-IN.md` v0.1, 결정 D-OI-1~7, 열린 질문 5. 구현 미착수 |
 | 빌드·규칙 인프라 | **완료** — 워크스페이스, 툴체인 고정, clippy·cargo-deny 정책 |
 | CI 워크플로 | 파일 작성됨, `.github/workflows/`에 배치 필요 |
 | 문서 | README·CONTRIBUTING·BRIEF·DECISIONS·이 문서 |
 | git | 로컬 저장소 + remote 연결, Phase 0 커밋(`efa1901`)까지 push 완료 |
-| **rsm-core** | **완료** — 11개 모듈 전부 구현, 단위 테스트 45 + doctest 1 |
+| **rsm-core** | **완료** — 11개 모듈 전부 구현, 단위 테스트 48 + doctest 1 |
 | **rsm-modules** | **완료** — Source 3종 · Detector 4종, 단위 8 + 통합 3 |
 | **rsm-cli** | **완료** — `rsm run` / `rsm check` / `rsm list`, JSONL 출력 |
-| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, 테스트 57 통과 |
+| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, 테스트 60 통과 |
 
 ### rsm-core 모듈
 
@@ -36,7 +36,7 @@
 | `config.rs` | YAML 로드·검증·조립 (`PipelineConfig` → `BuiltPipeline`) |
 | `schedule.rs` | `GroupWorker`·`ArbiterWorker`·`QueueSink`·`Runtime`·`run()` |
 | `arbiter.rs` | `MaxSeverity` 융합 정책 |
-| `supervisor.rs` | `HealthRegistry`(원자변수), 그룹 스테일·오버플로·고장 판정, 주기 통계(미스·시작 지연·작업 시간) |
+| `supervisor.rs` | `HealthRegistry`(원자변수), 그룹 스테일·오버플로·고장·데드라인 미스 판정, 주기 통계(미스·시작 지연·작업 시간) |
 | `error.rs` | `ConfigError` |
 
 ### rsm-modules
@@ -107,8 +107,9 @@ Windows에서 개발할 때는 `fast` 그룹 주기를 200 Hz 정도로 낮춰 �
 
 - [x] **주기 준수 계측 수정** — 데드라인 미스·시작 지연·실효 주파수로 나눠 기록.
       스케줄러의 위상 밀림도 같이 고침 (2026-11-02)
-- [ ] 데드라인 미스를 `availability`에 반영 — 지금은 세기만 하고 `Degraded`로
-      낮추지 않는다(R-06). 몇 번·얼마 동안 놓치면 낮출지 정해야 한다
+- [x] 데드라인 미스를 `availability`에 반영 — scan 구간에 새 미스가 있으면
+      `Degraded`, 깨끗한 구간 하나면 회복 (PRD D25, 2026-11-02)
+- [ ] 큐 오버플로 `Degraded`의 회복 규칙 — 지금은 sticky. PRD §10 Q-1
 - [ ] tick 경로 할당 0 계측 — 시험용 전역 할당자로 카운트
 - [ ] 지터 측정 하네스 — P50/P99/최대, 부하를 준 상태에서
 - [ ] `--duration-ms` 대신 Ctrl-C 처리 (시그널 핸들러 의존성 결정 필요)

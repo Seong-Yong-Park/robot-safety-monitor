@@ -8,13 +8,14 @@
 //! **독립된 메커니즘**이라는 점이 중요하다. TTL만 있으면 감시기가 죽었을 때 위험
 //! 이벤트가 조용히 사라져 `NONE` 으로 보인다.
 //!
-//! 세 가지 고장이 모두 [`MonitorAvailability`] 한 곳으로 모인다.
+//! 네 가지 고장이 모두 [`MonitorAvailability`] 한 곳으로 모인다.
 //!
 //! | 고장 | 어디서 기록되나 |
 //! |---|---|
 //! | 모듈 패닉 | 그룹 스레드의 `catch_unwind` 경계 → [`HealthRegistry::record_fault`] |
 //! | 그룹 정지·스테일 | [`HealthRegistry::scan`] 이 마지막 tick 시각을 보고 판정 |
 //! | 큐 오버플로 | Detector가 이벤트를 밀어 넣을 때 → [`HealthRegistry::record_overflow`] |
+//! | 데드라인 미스 | 그룹 스레드의 tick 끝 → [`HealthRegistry::record_group_tick`] |
 
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 
@@ -69,6 +70,8 @@ struct GroupSlot {
     last_tick_ns: AtomicU64,
     ticks: AtomicU64,
     misses: AtomicU64,
+    /// 직전 scan 때 본 `misses`. Supervisor 스레드만 쓴다 (PRD D25).
+    misses_seen: AtomicU64,
     overflows: AtomicU64,
     max_work_ns: AtomicU64,
     sum_work_ns: AtomicU64,
@@ -258,6 +261,11 @@ impl HealthRegistry {
     ///
     /// 판정 규칙은 보수적이다. 그룹이 멈췄으면 `Unavailable`, 모듈이 고장났거나
     /// 이벤트가 유실됐으면 `Degraded`.
+    ///
+    /// 데드라인 미스만은 **구간 판정**이다 (PRD D25). 직전 scan 이후 새 미스가 있으면
+    /// 이번 scan 은 `Degraded`, 없으면 그 이유로는 낮추지 않는다. 래치된 고장
+    /// 플래그가 아니라 워치독 창과 같다. 다른 조건과 달리 회복하는 이유는, 비실시간
+    /// 환경에서는 미스가 가끔 나므로 sticky 로 두면 늘 `Degraded`가 되기 때문이다.
     pub fn scan(&self, now: Instant, group_stale_after: Duration) -> MonitorAvailability {
         let mut worst = MonitorAvailability::Available;
 
@@ -270,7 +278,13 @@ impl HealthRegistry {
             if now.saturating_duration_since(last) > group_stale_after {
                 worst = MonitorAvailability::Unavailable;
             }
-            if g.overflows.load(Ordering::Relaxed) > 0 && worst == MonitorAvailability::Available {
+            // 다른 그룹 때문에 이미 나빠졌어도 기준점은 매번 옮긴다. 그래야 다음 구간이
+            // 이번 미스를 다시 세지 않는다.
+            let misses = g.misses.load(Ordering::Relaxed);
+            let missed_since_last_scan = g.misses_seen.swap(misses, Ordering::Relaxed) < misses;
+            if (missed_since_last_scan || g.overflows.load(Ordering::Relaxed) > 0)
+                && worst == MonitorAvailability::Available
+            {
                 worst = MonitorAvailability::Degraded;
             }
         }
@@ -449,5 +463,56 @@ mod tests {
         assert_eq!(h.group_stats(0).effective_millihertz(), 0);
         ok_tick(&h);
         assert_eq!(h.group_stats(0).effective_millihertz(), 0);
+    }
+
+    // ── 데드라인 미스 → availability (PRD D25) ─────────────────────────────────
+
+    /// 그룹 0 의 마지막 tick 근처 시각. 스테일 판정에 걸리지 않는다.
+    const NEAR: Instant = Instant::from_nanos(3_000_000);
+
+    #[test]
+    fn miss_degrades_only_the_scan_window_it_happened_in() {
+        let h = HealthRegistry::new(0, 1);
+        tick_us(&h, 0, 0, 10);
+        assert_eq!(h.scan(NEAR, STALE), MonitorAvailability::Available);
+
+        tick_us(&h, 1_000, 1_995, 10); // 데드라인 2_000 을 넘겨 끝남
+        assert_eq!(h.scan(NEAR, STALE), MonitorAvailability::Degraded);
+
+        // 이후 구간에 새 미스가 없다 → 회복
+        tick_us(&h, 2_000, 2_000, 10);
+        assert_eq!(h.scan(NEAR, STALE), MonitorAvailability::Available);
+        // 누적 횟수는 그대로 남는다 — 회복은 판정이지 기록 삭제가 아니다
+        assert_eq!(h.group_stats(0).misses, 1);
+    }
+
+    #[test]
+    fn miss_counted_while_another_group_is_stale_is_not_reported_twice() {
+        let h = HealthRegistry::new(0, 2);
+        // 그룹 1 은 시각 0 에 한 번 돌고 멈춘다
+        h.record_group_tick(
+            1,
+            Instant::ZERO,
+            Instant::ZERO,
+            Instant::from_nanos(10),
+            PERIOD,
+        );
+        tick_us(&h, 1_000, 1_995, 10); // 그룹 0 미스
+        let late = Instant::from_nanos(200_000_000);
+        assert_eq!(h.scan(late, STALE), MonitorAvailability::Unavailable);
+
+        // 그룹 1 이 살아났고 그룹 0 에 새 미스는 없다 → 앞의 미스를 다시 세지 않는다
+        let at = |ns: u64| Instant::from_nanos(ns);
+        h.record_group_tick(1, at(200_000_000), at(200_000_000), at(200_000_010), PERIOD);
+        h.record_group_tick(0, at(200_000_000), at(200_000_000), at(200_000_010), PERIOD);
+        assert_eq!(h.scan(late, STALE), MonitorAvailability::Available);
+    }
+
+    #[test]
+    fn stale_group_outranks_a_miss() {
+        let h = HealthRegistry::new(0, 1);
+        tick_us(&h, 1_000, 1_995, 10);
+        let later = Instant::from_nanos(200_000_000);
+        assert_eq!(h.scan(later, STALE), MonitorAvailability::Unavailable);
     }
 }
