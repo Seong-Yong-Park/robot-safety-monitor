@@ -164,9 +164,11 @@
 | UB 검출 | **Miri** (`cargo miri`) | `unsafe` 포함 코드 경로 |
 | 벤치마크 | **`criterion`** | tick 실행 시간 회귀 |
 | 커버리지 | `cargo-llvm-cov` | CI 리포트 |
-| 할당 검증 | 커스텀 `GlobalAlloc` 카운터 테스트 | R-08 "fast 경로 할당 0" |
+| 할당 검증 | 커스텀 `GlobalAlloc` 카운터 테스트 — 시험 전용 크레이트 `rsm-alloc-check` | R-08 "fast 경로 할당 0" |
 
 **결정.** **추천안 전체 채택** — `cargo test` + `proptest` + `insta` + `loom` + Miri + `criterion` + `cargo-llvm-cov` + 커스텀 할당 카운터. 도입 시점은 필요에 맞춰 순차적으로(할당 카운터·`insta`는 Phase 1 필수, `proptest`는 Arbiter 구현 시, `loom`은 그룹↔Arbiter 큐 연동 시, Miri는 `unsafe` 최초 등장 시, `criterion`은 지터 계측 착수 시). CI에서 Miri·`loom`은 비용이 크므로 주기 실행(예: 주 1회 또는 해당 크레이트 변경 시)으로 분리.
+
+**할당 카운터의 위치 (2026-11-02).** `GlobalAlloc`은 `unsafe` 트레이트라 `forbid(unsafe_code)`인 기존 크레이트에 둘 수 없다. 시험 전용 크레이트 **`rsm-alloc-check`**(`publish = false`)를 따로 두고 `unsafe`는 그 안의 `impl` 하나로 한정한다(`undocumented_unsafe_blocks = "deny"`로 `// SAFETY:` 근거 강제). 외부 크레이트(`stats_alloc` 등)를 쓰지 않은 이유: 시험 하나 때문에 남의 `unsafe`와 라이선스 검사를 들이지 않는다. `rsm-sys`에 넣지 않은 이유: 그쪽은 런타임용 OS 래퍼 자리라 배포 크레이트에 시험용 할당자가 섞인다. 카운트는 스레드별(thread-local)이다 — `cargo test`가 시험을 병렬로 돌리기 때문이다.
 
 ---
 
@@ -353,7 +355,7 @@ robot-safety-monitor/
 | T6 | 시간 | **자체 `Instant(u64 ns)` + `trait Clock`**, `MonotonicClock`·`VirtualClock`(v1), `RosClock`(Phase 3) |
 | T7 | 로깅·계측 | **3분리** — Sink `serde_json` / 진단 `tracing` / 계측 핫패스 고정 슬롯 → `metrics` |
 | T8 | 에러·패닉 | **`thiserror` + `anyhow` + unwind + 모듈 tick `catch_unwind` + 패닉 모듈 영구 `Faulted`** (재시작 정책은 P1 R-25) |
-| T9 | 테스트 | **전체 채택** `proptest`·`insta`·`loom`·Miri·`criterion`·`llvm-cov`·할당 카운터, 도입은 단계별 |
+| T9 | 테스트 | **전체 채택** `proptest`·`insta`·`loom`·Miri·`criterion`·`llvm-cov`·할당 카운터, 도입은 단계별. 할당 카운터는 시험 전용 크레이트 `rsm-alloc-check` |
 | T10 | 코딩 규칙 | core `forbid(unsafe_code)`, **`pedantic` 켬**, `indexing_slicing`은 핫패스 한정, `cargo-deny` 단일화 |
 | T11 | ML 런타임 | **ONNX + `ort`**, CPU 시작·CUDA feature, `ort-tract` 대체 여지. **모델 라이선스 검토 필수(AGPL 회피)** |
 | T12 | ROS 2 | **Jazzy Jalisco** (EOL 2029-05, Ubuntu 24.04). rclrs 수동 설치, Gazebo Harmonic 페어링 |

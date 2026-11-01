@@ -55,6 +55,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rsm-alloc-check"
+version = "0.1.0"
+dependencies = [
+ "rsm-core",
+ "rsm-modules",
+ "rtrb",
+]
+
+[[package]]
 name = "rsm-cli"
 version = "0.1.0"
 dependencies = [

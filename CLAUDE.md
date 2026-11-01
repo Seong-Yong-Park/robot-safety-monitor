@@ -40,6 +40,7 @@ rsm-cli  ──▶  rsm-modules  ──▶  rsm-core
 | `rsm-core` | 트레이트·타입·레지스트리·설정 로더·스케줄러·Supervisor. **미들웨어 비의존** |
 | `rsm-modules` | 레퍼런스 감지 모듈. 새 모듈은 `register_all`에 한 줄 추가 |
 | `rsm-cli` | `rsm run｜check｜list`. JSONL 출력 |
+| `rsm-alloc-check` | **시험 전용.** 계측용 전역 할당자로 fast tick 경로 할당 0(R-08)을 검증. 배포 안 함, 다른 크레이트의 `[dependencies]`에 넣지 않는다 |
 
 파이프라인: `Source → Detector → Arbiter → Sink` + `Supervisor` + 주입된 `Clock`.
 흐르는 타입은 셋뿐 — `Signal` / `HazardEvent` / `SafetyState`.
@@ -49,7 +50,10 @@ rsm-cli  ──▶  rsm-modules  ──▶  rsm-core
 **어기면 빌드가 실패한다. 우회하지 말고 설계를 고칠 것.**
 
 - `rsm-core`는 `forbid(unsafe_code)`. unsafe 가 필요하면 `rsm-sys` 크레이트로
-  격리하고 `// SAFETY:` 주석으로 근거를 남긴다.
+  격리하고 `// SAFETY:` 주석으로 근거를 남긴다. 지금 `unsafe`가 있는 곳은 시험 전용
+  `rsm-alloc-check`의 `GlobalAlloc` 구현 하나뿐이다.
+- tick 경로를 바꾸면 `cargo test -p rsm-alloc-check`가 할당 0을 확인한다. 실패 메시지에
+  몇 번째 tick에서 몇 번 할당했는지 나온다.
 - 라이브러리 크레이트에서 `unwrap()` / `expect()` / `panic!()` 금지.
   실패는 `Result`로 돌려주고 판단은 호출자가 한다.
   테스트 모듈에서만 `#[allow(..., reason = "...")]`로 완화한다.

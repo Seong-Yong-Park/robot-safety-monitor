@@ -1,0 +1,47 @@
+[package]
+name = "rsm-alloc-check"
+description = "Robot Safety Monitor — test-only counting allocator that proves the fast tick path never touches the heap (R-08)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+# 시험 전용이다. crates.io 에 올리지 않고, 다른 크레이트의 [dependencies] 에도
+# 넣지 않는다. 전역 할당자를 갈아끼우므로 링크된 바이너리 전체가 영향을 받는다.
+publish = false
+
+# 이 크레이트 자체는 의존성이 없다. 할당자는 std 만으로 만든다.
+[dependencies]
+
+# 시험(tests/fast_path.rs)이 실제 파이프라인을 조립해 tick 을 밟는 데 쓴다.
+[dev-dependencies]
+rsm-core = { path = "../rsm-core" }
+rsm-modules = { path = "../rsm-modules" }
+rtrb = { workspace = true }
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  워크스페이스 lint 를 물려받지 않는다 (`[lints] workspace = true` 없음).
+#
+#  워크스페이스는 unsafe_code = "forbid" 인데, forbid 는 하위에서 되돌릴 수
+#  없다. 이 크레이트는 GlobalAlloc(unsafe 트레이트)을 구현해야 하므로 "deny" 로
+#  낮추고, 구현 한 곳에서만 #[allow(unsafe_code, reason = "...")] 로 연다.
+#  나머지는 루트 Cargo.toml 의 [workspace.lints] 를 그대로 옮겨 적었다 —
+#  그쪽을 바꾸면 여기도 같이 바꾼다.
+# ═══════════════════════════════════════════════════════════════════════════
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+must_use_candidate = "allow"
+module_name_repetitions = "allow"
+doc_markdown = "allow"
+# unsafe 블록·impl 마다 `// SAFETY:` 근거가 없으면 빌드 실패 (CLAUDE.md 규칙을 기계가 지킨다)
+undocumented_unsafe_blocks = "deny"

@@ -5,8 +5,8 @@
 ## 한 줄
 
 **Phase 1 진행 중.** Phase 0(설정 하나로 조립되는 파이프라인, `demo-a`·`demo-b`)이
-끝났고, Phase 1 첫 항목인 **주기 준수 계측 수정**을 마쳤다. 다음은 할당 0 검증과
-지터 측정 하네스.
+끝났다. Phase 1에서 **주기 준수 계측 수정**, **데드라인 미스 → `Degraded`**,
+**tick 경로 할당 0 검증**을 마쳤다. 다음은 지터 측정 하네스.
 
 ## 무엇이 되어 있나
 
@@ -17,11 +17,12 @@
 | 빌드·규칙 인프라 | **완료** — 워크스페이스, 툴체인 고정, clippy·cargo-deny 정책 |
 | CI 워크플로 | 파일 작성됨, `.github/workflows/`에 배치 필요 |
 | 문서 | README·CONTRIBUTING·BRIEF·DECISIONS·이 문서 |
-| git | 로컬 저장소 + remote 연결, Phase 0 커밋(`efa1901`)까지 push 완료 |
+| git | 로컬 저장소 + remote 연결. push 는 사용자가 한다 |
 | **rsm-core** | **완료** — 11개 모듈 전부 구현, 단위 테스트 48 + doctest 1 |
 | **rsm-modules** | **완료** — Source 3종 · Detector 4종, 단위 8 + 통합 3 |
 | **rsm-cli** | **완료** — `rsm run` / `rsm check` / `rsm list`, JSONL 출력 |
-| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, 테스트 60 통과 |
+| **rsm-alloc-check** | **완료** — 시험 전용 계측 할당자. 계측기 자체 시험 5 + fast 경로 시험 1 + doctest 1 |
+| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, 테스트 67 통과, fast tick 경로 할당 0 |
 
 ### rsm-core 모듈
 
@@ -61,8 +62,22 @@
 | 주기 그룹 2개 독립 동작 | demo-a의 `fast` 1 kHz + `normal` 100 Hz | **확인** — 둘 다 돈다. 단 주기는 못 지켰다(아래 실측). Phase 1에서 고침 |
 | 모듈 고장 격리 | `panic_probe`를 demo-b에 배치 | **확인** — 해당 모듈만 `Faulted`, 나머지 계속 동작 |
 | 감시 불가 명시 | `stalling` + `comm_timeout` | **확인** — `availability`가 `Degraded`, `comm_timeout` CRITICAL |
-| tick 경로 할당 0 | 전역 할당자 교체 후 카운터 확인 | **Phase 1** — 설계상 할당 없음, 계측 미구현 |
+| tick 경로 할당 0 | 전역 할당자 교체 후 카운터 확인 | **확인 (Phase 1)** — `rsm-alloc-check/tests/fast_path.rs`. 아래 참고 |
 | 시계 주입 | 가상 시계로 tick을 손으로 밟는 통합 시험 | **확인** — `rsm-modules/tests/pipeline.rs` |
+
+### tick 경로 할당 0 (R-08)
+
+`cargo test -p rsm-alloc-check`. 레퍼런스 Source 4개·Detector 4개(`panic_probe` 제외)를
+한 fast 그룹에 넣고 1200 tick을 밟는다. tick마다 `GroupWorker::tick` + `record_group_tick`
+구간의 할당·재할당·해제를 세어 **셋 다 0**이어야 통과다. 워밍업 없이 첫 tick부터 잰다.
+
+- 측정 구간이 이벤트 냄/안 냄, `min_distance` 경고·치명, 큐 오버플로, 입력 멈춤 →
+  `comm_timeout`을 모두 지나는지도 확인한다. 안 지나면 시험이 실패한다(헛통과 방지).
+- 시험이 실제로 잡는지 확인했다: `QueueSink::emit`에 `Box` 하나를 일부러 넣자
+  1200 tick 전부에서 할당 2·해제 2로 실패했다.
+- **범위 밖**: 패닉 경로(`catch_unwind`가 패닉 내용을 `Box`에 담는다)와 Arbiter·Sink
+  경로(JSON 직렬화).
+- 가상 시각으로 밟으므로 실제 `group_loop`의 `thread::sleep`은 포함하지 않는다.
 
 ### 실측 (release 빌드, demo-a `fast` 그룹 = 1 kHz 설정)
 
@@ -110,7 +125,8 @@ Windows에서 개발할 때는 `fast` 그룹 주기를 200 Hz 정도로 낮춰 �
 - [x] 데드라인 미스를 `availability`에 반영 — scan 구간에 새 미스가 있으면
       `Degraded`, 깨끗한 구간 하나면 회복 (PRD D25, 2026-11-02)
 - [ ] 큐 오버플로 `Degraded`의 회복 규칙 — 지금은 sticky. PRD §10 Q-1
-- [ ] tick 경로 할당 0 계측 — 시험용 전역 할당자로 카운트
+- [x] tick 경로 할당 0 계측 — `rsm-alloc-check` (2026-11-02)
+- [ ] Miri — `unsafe`가 처음 생겼으므로 TECH_STACK T9의 도입 시점이다. nightly 툴체인 필요
 - [ ] 지터 측정 하네스 — P50/P99/최대, 부하를 준 상태에서
 - [ ] `--duration-ms` 대신 Ctrl-C 처리 (시그널 핸들러 의존성 결정 필요)
 - [ ] JSONL 리플레이 — 기록한 줄을 `VirtualClock`으로 되돌려 같은 결과가 나오는지

@@ -59,6 +59,7 @@ cargo run --release -p rsm-cli --bin rsm -- run --config examples/demo-a.yaml --
 | `rsm-core` | 트레이트·타입·레지스트리·설정 로더·스케줄러·Supervisor. **미들웨어 비의존** |
 | `rsm-modules` | 레퍼런스 감지 모듈 (`ramp`·`constant`·`stalling` / `threshold`·`min_distance`·`comm_timeout`·`panic_probe`) |
 | `rsm-cli` | `rsm` 실행기 — `run` / `check` / `list` |
+| `rsm-alloc-check` | 시험 전용 — `fast` tick 경로가 힙을 쓰지 않음을 검증하는 계측 할당자 |
 | `rsm-ml` (예정) | 사전학습 ONNX 모델 래퍼 Detector |
 | `rsm-mcap` (예정) | rosbag2/MCAP 리플레이 Source |
 | `rsm-ros2` (예정) | rclrs 기반 Source/Sink 어댑터 |
