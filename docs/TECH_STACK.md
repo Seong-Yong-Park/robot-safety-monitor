@@ -92,7 +92,7 @@
 
 **추천.** `std::thread` + `thread-priority` + `rtrb`(모든 그룹 간 통신을 SPSC로 정규화). 큐 용량은 설정에서 고정.
 
-**결정.** **`std::thread` + `thread-priority` + `rtrb`.** 그룹당 OS 스레드 1개, 절대 시각 기준 `sleep_until` 루프(지터 부족 시 `timerfd`로 교체), **한 주기 이상 놓친 tick은 건너뛰고 위상(`t0 + k·period` 격자)은 유지**한다 — 밀린 tick을 몰아서 돌리지 않는다(2026-11-02, Phase 0 실측에서 위상을 "지금"으로 되맞추는 방식이 `sleep` 늦잠만큼 매 tick 주기를 늘린다는 것이 드러나 바꿨다), 그룹마다 SPSC 큐 1개를 두고 Arbiter가 순회 폴링. tokio 미사용. 오버플로 정책은 PRD D23 — 들어오는 이벤트를 버리고(`rtrb` push 실패) 원자 카운터에 기록, Supervisor가 `availability`를 `Degraded`로 낮춘다.
+**결정.** **`std::thread` + `thread-priority` + `rtrb`.** 그룹당 OS 스레드 1개, 절대 시각 기준 `sleep_until` 루프(지터 부족 시 `timerfd`로 교체), **한 주기 이상 놓친 tick은 건너뛰고 위상(`t0 + k·period` 격자)은 유지**한다 — 밀린 tick을 몰아서 돌리지 않는다(2026-11-02, Phase 0 실측에서 위상을 "지금"으로 되맞추는 방식이 `sleep` 늦잠만큼 매 tick 주기를 늘린다는 것이 드러나 바꿨다), 그룹마다 SPSC 큐 1개를 두고 Arbiter가 순회 폴링. tokio 미사용. 오버플로 정책은 PRD D23 — 들어오는 이벤트를 버리고(`rtrb` push 실패) 원자 카운터에 기록, Supervisor가 `availability`를 `Degraded`로 낮춘다(직전 scan 이후 새 오버플로가 있는 구간만, PRD D26).
 
 **실시간 우선순위 적용 (2026-11-02).** 그룹 설정에 `rt_priority: 1..=99`를 두면 그 그룹 스레드만 Linux `SCHED_FIFO`로 돈다. 없으면 OS 기본(`SCHED_OTHER`). 세부 규칙:
 - **적용 못 하면 기동 실패.** 권한(root·`CAP_SYS_NICE`·rtprio 한도)이 없거나 Linux가 아니면 `ConfigError::Startup`으로 멈춘다. 우선순위 없이 조용히 돌면 설정이 전제한 주기 보장이 빠진 채 감시하는 셈이다 (R-02 "모호한 설정은 기동 실패"와 같은 원리). 이미 띄운 스레드는 거두고 끝낸다. 스레드 생성 실패도 같은 길로 바꿨다 — 전에는 조용히 무시했다.

@@ -74,6 +74,8 @@ struct GroupSlot {
     /// 직전 scan 때 본 `misses`. Supervisor 스레드만 쓴다 (PRD D25).
     misses_seen: AtomicU64,
     overflows: AtomicU64,
+    /// 직전 scan 때 본 `overflows`. Supervisor 스레드만 쓴다 (PRD D26).
+    overflows_seen: AtomicU64,
     max_work_ns: AtomicU64,
     sum_work_ns: AtomicU64,
     max_late_ns: AtomicU64,
@@ -282,12 +284,13 @@ impl HealthRegistry {
     /// 표 전체를 훑어 가용성을 다시 판정한다. Supervisor 스레드가 주기적으로 부른다.
     ///
     /// 판정 규칙은 보수적이다. 그룹이 멈췄으면 `Unavailable`, 모듈이 고장났거나
-    /// 이벤트가 유실됐으면 `Degraded`.
+    /// 데드라인 미스·이벤트 유실이 있었으면 `Degraded`.
     ///
-    /// 데드라인 미스만은 **구간 판정**이다 (PRD D25). 직전 scan 이후 새 미스가 있으면
-    /// 이번 scan 은 `Degraded`, 없으면 그 이유로는 낮추지 않는다. 래치된 고장
-    /// 플래그가 아니라 워치독 창과 같다. 다른 조건과 달리 회복하는 이유는, 비실시간
-    /// 환경에서는 미스가 가끔 나므로 sticky 로 두면 늘 `Degraded`가 되기 때문이다.
+    /// 미스와 유실(큐 오버플로)은 **구간 판정**이다 (PRD D25·D26). 직전 scan 이후 새로
+    /// 났으면 이번 scan 은 `Degraded`, 없으면 그 이유로는 낮추지 않는다. 래치된 고장
+    /// 플래그가 아니라 워치독 창과 같다. sticky 로 두면 버스트 한 번에 끝까지
+    /// `Degraded`가 되어 신호가 의미를 잃는다. 누적 횟수는 통계에 남고, `Degraded`였던
+    /// 구간은 Sink 출력에 남는다. 모듈 고장만은 회복하지 않는다 — 실제로 멈춰 있다.
     pub fn scan(&self, now: Instant, group_stale_after: Duration) -> MonitorAvailability {
         let mut worst = MonitorAvailability::Available;
 
@@ -301,12 +304,10 @@ impl HealthRegistry {
                 worst = MonitorAvailability::Unavailable;
             }
             // 다른 그룹 때문에 이미 나빠졌어도 기준점은 매번 옮긴다. 그래야 다음 구간이
-            // 이번 미스를 다시 세지 않는다.
-            let misses = g.misses.load(Ordering::Relaxed);
-            let missed_since_last_scan = g.misses_seen.swap(misses, Ordering::Relaxed) < misses;
-            if (missed_since_last_scan || g.overflows.load(Ordering::Relaxed) > 0)
-                && worst == MonitorAvailability::Available
-            {
+            // 이번 미스·유실을 다시 세지 않는다.
+            let missed = new_since_last_scan(&g.misses, &g.misses_seen);
+            let dropped = new_since_last_scan(&g.overflows, &g.overflows_seen);
+            if (missed || dropped) && worst == MonitorAvailability::Available {
                 worst = MonitorAvailability::Degraded;
             }
         }
@@ -338,6 +339,14 @@ impl HealthRegistry {
             .filter_map(|(i, _)| u16::try_from(i).ok().map(ModuleId))
             .collect()
     }
+}
+
+/// 누적 카운터 `count`가 직전 scan 이후 늘었나. 기준점 `seen`을 지금 값으로 옮긴다.
+///
+/// `seen`은 Supervisor 스레드만 쓴다. 그룹 스레드는 `count`만 올린다.
+fn new_since_last_scan(count: &AtomicU64, seen: &AtomicU64) -> bool {
+    let now = count.load(Ordering::Relaxed);
+    seen.swap(now, Ordering::Relaxed) < now
 }
 
 #[cfg(test)]
@@ -555,6 +564,39 @@ mod tests {
         h.record_group_tick(1, at(200_000_000), at(200_000_000), at(200_000_010), PERIOD);
         h.record_group_tick(0, at(200_000_000), at(200_000_000), at(200_000_010), PERIOD);
         assert_eq!(h.scan(late, STALE), MonitorAvailability::Available);
+    }
+
+    // ── 큐 오버플로 → availability (PRD D26) ───────────────────────────────────
+
+    #[test]
+    fn overflow_degrades_only_the_scan_window_it_happened_in() {
+        let h = HealthRegistry::new(0, 1);
+        tick_us(&h, 0, 0, 10);
+        h.record_overflow(0);
+        assert_eq!(h.scan(NEAR, STALE), MonitorAvailability::Degraded);
+
+        // 이후 구간에 새 유실이 없다 → 회복
+        tick_us(&h, 1_000, 1_000, 10);
+        assert_eq!(h.scan(NEAR, STALE), MonitorAvailability::Available);
+
+        // 다시 넘치면 다시 낮춘다
+        h.record_overflow(0);
+        h.record_overflow(0);
+        assert_eq!(h.scan(NEAR, STALE), MonitorAvailability::Degraded);
+        assert_eq!(h.scan(NEAR, STALE), MonitorAvailability::Available);
+        // 누적 횟수는 그대로 남는다
+        assert_eq!(h.group_stats(0).overflows, 3);
+    }
+
+    #[test]
+    fn module_fault_stays_degraded_while_overflow_recovers() {
+        let h = HealthRegistry::new(1, 1);
+        tick_us(&h, 0, 0, 10);
+        h.record_overflow(0);
+        h.record_fault(ModuleId(0));
+        assert_eq!(h.scan(NEAR, STALE), MonitorAvailability::Degraded);
+        // 유실은 회복 대상이지만 고장난 모듈은 그대로다
+        assert_eq!(h.scan(NEAR, STALE), MonitorAvailability::Degraded);
     }
 
     #[test]

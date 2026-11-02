@@ -33,7 +33,8 @@
 | D22 | 신호 타입은 **고정 enum** (`Bool`/`Scalar`/`Distance`/`Vector`). 확장은 `Custom` variant (예약·미구현) |
 | D23 | 큐 오버플로는 **들어오는 이벤트를 버리고 `Degraded`**. 블로킹하지 않는다. `Unavailable`이 아니다 — 그룹은 돌고 있다 |
 | D24 | Supervisor 생존은 **Sink 주기 출력(`on_change_only: false`)을 heartbeat로.** 외부 watchdog은 R-21 |
-| D25 | 데드라인 미스는 **scan 구간 판정으로 `Degraded`.** 직전 scan 이후 새 미스가 있으면 `Degraded`, 깨끗한 구간 하나면 회복. `Unavailable`이 아니다. 오버플로 회복 여부는 PRD §10 Q-1 |
+| D25 | 데드라인 미스는 **scan 구간 판정으로 `Degraded`.** 직전 scan 이후 새 미스가 있으면 `Degraded`, 깨끗한 구간 하나면 회복. `Unavailable`이 아니다. 오버플로도 같은 규칙(D26) |
+| D26 | 큐 오버플로도 **scan 구간 판정으로 회복**(Q-1 해소). 누적 횟수는 통계에 남고, `Degraded` 구간은 JSONL에 남는다. 모듈 `Faulted`는 sticky 유지 |
 
 ## Outside-In 결정 (`PRD-OUTSIDE-IN.md` §7)
 
@@ -77,7 +78,7 @@
 |---|---|
 | 위험 타입 네이밍 | **D20** — 3단 계층 문자열 |
 | 신호 타입 시스템 | **D22** — 고정 enum. `Custom`은 예약·미구현 |
-| 큐 오버플로 정책 | **D23** — 들어오는 이벤트를 버리고 `Degraded` |
+| 큐 오버플로 정책 | **D23** — 들어오는 이벤트를 버리고 `Degraded`. **D26** — 새 오버플로가 없는 scan 구간이면 회복 |
 | Supervisor 자체 생존 | **D24** — Sink 주기 출력이 heartbeat. Supervisor 스레드만 멈추는 경우는 못 잡음 |
 | 데드라인 미스 | **D25** — scan 구간에 새 미스가 있으면 `Degraded`, 없으면 회복 |
 | 실행 파일 | **PRD §5.3** — `rsm-cli` (`run` / `check` / `list`) |
