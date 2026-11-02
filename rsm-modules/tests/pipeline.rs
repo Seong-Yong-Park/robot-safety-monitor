@@ -284,3 +284,74 @@ fn rt_priority_either_applies_or_fails_loudly() {
         }
     }
 }
+
+// ── 권고 액션 설정 (R-18, PRD D27) ────────────────────────────────────────────
+
+const ACTIONS: &str = "recommended_action:\n  by_level: { advisory: none, warning: slow_down, critical: stop }\n  on_unavailable: stop\n";
+
+#[test]
+fn recommended_action_section_is_optional_and_resolves_by_level() {
+    use rsm_core::event::RecommendedAction as A;
+
+    let off = PipelineConfig::from_str(YAML)
+        .unwrap()
+        .build(&registry())
+        .unwrap();
+    assert!(
+        off.recommended_action.is_none(),
+        "absent section = feature off"
+    );
+
+    let yaml = format!("{YAML}{ACTIONS}");
+    let on = PipelineConfig::from_str(&yaml)
+        .unwrap()
+        .build(&registry())
+        .unwrap();
+    let a = on.recommended_action.expect("the section was given");
+    let av = MonitorAvailability::Available;
+    assert_eq!(a.resolve(Severity::None, av), A::None);
+    assert_eq!(a.resolve(Severity::Warning, av), A::SlowDown);
+    assert_eq!(
+        a.resolve(Severity::Critical, MonitorAvailability::Degraded),
+        A::Stop
+    );
+    assert_eq!(
+        a.resolve(Severity::None, MonitorAvailability::Unavailable),
+        A::Stop
+    );
+}
+
+#[test]
+fn recommended_action_has_no_defaults() {
+    // 감시 불가 시 권고를 빠뜨리면 기동하지 않는다 — 그 판단을 우리가 대신하지 않는다
+    let yaml = format!("{YAML}{}", ACTIONS.replace("  on_unavailable: stop\n", ""));
+    let err = PipelineConfig::from_str(&yaml).unwrap_err().to_string();
+    assert!(!err.is_empty());
+
+    // 수준 하나를 빠뜨려도 마찬가지
+    let yaml = format!("{YAML}{}", ACTIONS.replace("advisory: none, ", ""));
+    assert!(PipelineConfig::from_str(&yaml).is_err());
+}
+
+#[test]
+fn recommended_action_rejects_undefined_values() {
+    // 의미가 정의되지 않은 값은 받지 않는다 (R-18 "정의 없는 값 금지")
+    let yaml = format!(
+        "{YAML}{}",
+        ACTIONS.replace("warning: slow_down", "warning: reduce")
+    );
+    assert!(PipelineConfig::from_str(&yaml).is_err());
+}
+
+#[test]
+fn recommended_action_must_not_weaken_as_severity_rises() {
+    let yaml = format!(
+        "{YAML}{}",
+        ACTIONS.replace(
+            "warning: slow_down, critical: stop",
+            "warning: stop, critical: slow_down"
+        )
+    );
+    let err = build_err(&yaml);
+    assert!(err.contains("must not weaken"), "{err}");
+}

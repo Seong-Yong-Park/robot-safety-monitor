@@ -14,24 +14,24 @@ Linux에서 한다(아직 장비 없음).
 
 | 영역 | 상태 |
 |---|---|
-| 의사결정 | **완료** — PRD v0.3(D1~D28), TECH_STACK v1.0(T1~T16). 열린 질문 0 (R-18 값 집합은 outside-in Q-OI-4) |
+| 의사결정 | **완료** — PRD v0.3(D1~D28), TECH_STACK v1.0(T1~T16). 열린 질문 0 |
 | Outside-in | **PRD 초안** — `docs/PRD-OUTSIDE-IN.md` v0.1, 결정 D-OI-1~7, 열린 질문 5. 구현 미착수 |
 | 빌드·규칙 인프라 | **완료** — 워크스페이스, 툴체인 고정, clippy·cargo-deny 정책 |
 | CI 워크플로 | **동작 중** — `ci.yml`(clippy·test: ubuntu/windows, aarch64 빌드, `cargo-deny`), `heavy.yml`(주기 실행) |
 | 문서 | README·CONTRIBUTING·BRIEF·DECISIONS·이 문서 |
 | git | 로컬 저장소 + remote 연결. push 는 사용자가 한다 |
-| **rsm-core** | **완료** — 12개 모듈 전부 구현, 단위 테스트 60 + doctest 1 |
-| **rsm-modules** | **완료** — Source 3종 · Detector 4종, 단위 8 + 통합 9 |
+| **rsm-core** | **완료** — 12개 모듈 전부 구현, 단위 테스트 62 + doctest 1 |
+| **rsm-modules** | **완료** — Source 3종 · Detector 4종, 단위 8 + 통합 13 |
 | **rsm-cli** | **완료** — `rsm run` / `rsm check` / `rsm list`, JSONL 출력. 그룹별 지터 요약, Ctrl-C 정지 |
 | **rsm-alloc-check** | **완료** — 시험 전용 계측 할당자. 계측기 자체 시험 5 + fast 경로 시험 1 + doctest 1 |
-| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, rustdoc 링크 경고 0, 테스트 85 통과, fast tick 경로 할당 0 |
+| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, rustdoc 링크 경고 0, 테스트 91 통과, fast tick 경로 할당 0 |
 
 ### rsm-core 모듈
 
 | 파일 | 역할 |
 |---|---|
 | `time.rs` | `Instant`/`Duration`/`Clock`/`MonotonicClock`/`VirtualClock` |
-| `event.rs` | `Severity`·`Category`·`HazardEvent`·`EvidenceSet`·`SafetyState`·`MonitorAvailability` |
+| `event.rs` | `Severity`·`Category`·`HazardEvent`·`EvidenceSet`·`SafetyState`·`MonitorAvailability`·`RecommendedAction`(R-18) |
 | `signal.rs` | `Signal` enum, `SignalSlot`, `SignalBus` |
 | `intern.rs` | `Interner`, `Names` — 이름 → `u16` |
 | `traits.rs` | `Source`·`Detector`·`ArbiterPolicy`·`Sink`·`EventSink`·`ModuleCtx`·`Params`·`Health` |
@@ -181,7 +181,7 @@ Windows에서 개발할 때는 `fast` 그룹 주기를 200 Hz 정도로 낮춰 �
 - [x] Ctrl-C 처리 — `ctrlc`를 `rsm-cli`에만, `--duration-ms` 없으면 Ctrl-C까지 (TECH_STACK T10, 2026-11-02)
 - [x] Arbiter Hz ≥ Supervisor Hz 설정 검증 — `Degraded` 구간이 출력에서 빠지지 않게 (PRD D26, 2026-11-02)
 - [ ] **JSONL 리플레이** — v0.5 범위는 재생만: 리플레이 Source + `rsm replay` + `insta` 스냅샷 (PRD D28)
-- [ ] **권고 액션 R-18** — 구조는 PRD D27로 확정. 값 집합(outside-in Q-OI-4)을 정한 뒤 구현. v0.5 전
+- [x] **권고 액션 R-18** — `none` / `slow_down` / `stop`, 설정 `recommended_action` 절, JSONL `recommended_action` 필드 (PRD D27, 2026-11-02)
 - [ ] 메트릭 파사드 (T7)
 - [ ] `rsm-core` 공개 API 문서 정리 + mdBook (나중)
 

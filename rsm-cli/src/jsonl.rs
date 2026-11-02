@@ -76,6 +76,7 @@ impl Sink for JsonlSink {
             "ts_ns": state.updated_at.as_nanos(),
             "level": state.level.as_str(),
             "availability": state.availability.as_str(),
+            "recommended_action": state.recommended_action.as_str(),
             "active": active,
         });
 

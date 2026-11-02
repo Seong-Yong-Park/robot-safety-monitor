@@ -34,7 +34,7 @@ use std::thread::{self, JoinHandle};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
-use crate::config::{BuiltPipeline, GroupPlan};
+use crate::config::{BuiltPipeline, GroupPlan, RecommendedActionConfig};
 use crate::error::ConfigError;
 use crate::event::{HazardEvent, MonitorAvailability, Severity};
 use crate::intern::Names;
@@ -191,6 +191,7 @@ pub struct ArbiterWorker {
     names: Arc<Names>,
     on_change_only: bool,
     last: Option<(Severity, MonitorAvailability, usize)>,
+    actions: Option<RecommendedActionConfig>,
 }
 
 impl std::fmt::Debug for ArbiterWorker {
@@ -218,7 +219,15 @@ impl ArbiterWorker {
             names,
             on_change_only,
             last: None,
+            actions: None,
         }
+    }
+
+    /// 권고 액션 매핑을 건다 (R-18). `None`이면 권고는 늘 `none`.
+    #[must_use]
+    pub fn with_recommended_action(mut self, actions: Option<RecommendedActionConfig>) -> Self {
+        self.actions = actions;
+        self
     }
 
     /// 한 tick. 큐를 모두 비우고, 평가하고, 필요하면 출력한다.
@@ -229,7 +238,11 @@ impl ArbiterWorker {
             }
         }
 
-        let state = self.policy.evaluate(now, availability);
+        let mut state = self.policy.evaluate(now, availability);
+        // 권고는 (수준, 가용성)에서 결정되므로 아래 변화 판정 키에 따로 넣지 않는다.
+        if let Some(a) = &self.actions {
+            state.recommended_action = a.resolve(state.level, state.availability);
+        }
         let key = (state.level, state.availability, state.active.len());
 
         // `on_change_only`가 false면 매 주기 내보낸다. 이것이 곧 하트비트다 —
@@ -334,6 +347,7 @@ pub fn run(
         arbiter_period,
         supervisor_period,
         group_stale_after,
+        recommended_action,
         sink: sink_cfg,
     } = pipeline;
 
@@ -365,7 +379,8 @@ pub fn run(
         sink,
         Arc::clone(&names),
         sink_cfg.on_change_only,
-    );
+    )
+    .with_recommended_action(recommended_action);
     let (clock_a, health_a, stop_a) = (Arc::clone(clock), Arc::clone(&health), Arc::clone(&stop));
     let spawned = spawn_named("rsm-arbiter", move || {
         let mut release = clock_a.now();
@@ -764,5 +779,104 @@ mod tests {
     #[test]
     fn zero_period_does_not_divide_by_zero() {
         assert_eq!(next_release(us(5), us(9), Duration::ZERO), us(9));
+    }
+
+    // ── 권고 액션 (R-18, PRD D27) ─────────────────────────────────────────────
+
+    use super::ArbiterWorker;
+    use crate::arbiter::MaxSeverity;
+    use crate::config::{LevelActions, RecommendedActionConfig};
+    use crate::event::{MonitorAvailability, RecommendedAction, SafetyState};
+    use crate::intern::Names;
+    use crate::traits::Sink;
+    use std::sync::{Arc, Mutex};
+
+    /// Sink 가 받은 상태의 (수준, 가용성, 권고) 기록.
+    type Log = Arc<Mutex<Vec<(Severity, MonitorAvailability, RecommendedAction)>>>;
+
+    /// 받은 상태를 [`Log`]에 모은다.
+    struct Seen(Log);
+    impl Sink for Seen {
+        fn publish(&mut self, state: &SafetyState, _names: &Names) {
+            self.0.lock().unwrap().push((
+                state.level,
+                state.availability,
+                state.recommended_action,
+            ));
+        }
+    }
+
+    fn critical_event(at: Instant) -> HazardEvent {
+        HazardEvent::new(
+            ModuleId(0),
+            HazardTypeId(0),
+            Category::Internal,
+            Severity::Critical,
+            at,
+            Duration::from_millis(50),
+        )
+    }
+
+    fn arbiter_with(
+        actions: Option<RecommendedActionConfig>,
+    ) -> (ArbiterWorker, rtrb::Producer<HazardEvent>, Log) {
+        let (tx, rx) = rtrb::RingBuffer::new(8);
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let worker = ArbiterWorker::new(
+            Box::new(MaxSeverity::new()),
+            vec![rx],
+            Box::new(Seen(Arc::clone(&seen))),
+            Arc::new(Names::new()),
+            false,
+        )
+        .with_recommended_action(actions);
+        (worker, tx, seen)
+    }
+
+    const ACTIONS: RecommendedActionConfig = RecommendedActionConfig {
+        by_level: LevelActions {
+            advisory: RecommendedAction::None,
+            warning: RecommendedAction::SlowDown,
+            critical: RecommendedAction::Stop,
+        },
+        on_unavailable: RecommendedAction::Stop,
+    };
+
+    #[test]
+    fn arbiter_fills_the_recommendation_from_the_mapping() {
+        use MonitorAvailability::{Available, Unavailable};
+
+        let (mut arb, mut tx, seen) = arbiter_with(Some(ACTIONS));
+        let t0 = Instant::ZERO;
+        arb.tick(t0, Available); //                   위험 없음
+        tx.push(critical_event(t0)).unwrap();
+        arb.tick(t0, Available); //                   CRITICAL
+        arb.tick(t0 + Duration::from_millis(100), Unavailable); // TTL 지남 + 감시 불가
+
+        let seen = seen.lock().unwrap();
+        assert_eq!(
+            *seen,
+            vec![
+                (Severity::None, Available, RecommendedAction::None),
+                (Severity::Critical, Available, RecommendedAction::Stop),
+                // 수준은 NONE 이지만 감시 불가라 그 NONE 을 믿을 수 없다 → on_unavailable
+                (Severity::None, Unavailable, RecommendedAction::Stop),
+            ]
+        );
+    }
+
+    #[test]
+    fn without_the_section_the_recommendation_is_always_none() {
+        let (mut arb, mut tx, seen) = arbiter_with(None);
+        tx.push(critical_event(Instant::ZERO)).unwrap();
+        arb.tick(Instant::ZERO, MonitorAvailability::Unavailable);
+        assert_eq!(
+            seen.lock().unwrap()[0],
+            (
+                Severity::Critical,
+                MonitorAvailability::Unavailable,
+                RecommendedAction::None
+            )
+        );
     }
 }

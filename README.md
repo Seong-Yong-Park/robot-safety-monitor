@@ -29,7 +29,7 @@ cargo run --release -p rsm-cli --bin rsm -- run --config examples/demo-a.yaml --
 출력은 JSON Lines 한 줄에 상태 하나다.
 
 ```json
-{"ts_ns":250860890,"level":"CRITICAL","availability":"Available","active":[
+{"ts_ns":250860890,"level":"CRITICAL","availability":"Available","recommended_action":"stop","active":[
   {"source":"torque_limit","kind":"internal.joint.torque_limit","category":"internal",
    "severity":"CRITICAL","confidence":1.0,"ttl_ms":50,
    "evidence":{"measured":114.5,"limit":100.0}}]}
@@ -37,6 +37,10 @@ cargo run --release -p rsm-cli --bin rsm -- run --config examples/demo-a.yaml --
 
 `level`만 보지 말고 `availability`를 함께 봐야 한다. `Degraded`/`Unavailable`
 일 때의 `level`은 "위험이 없다"는 뜻이 아니라 "다 못 봤다"는 뜻이다.
+
+`recommended_action`(`none` / `slow_down` / `stop`)은 **권고이지 명령이 아니다**. 설정의
+`recommended_action` 절이 심각도와 가용성을 권고로 옮기고, 절이 없으면 늘 `none`이다.
+실제로 감속·정지할지, 어떻게 할지는 로봇 제어기가 정한다.
 
 ## 구조
 

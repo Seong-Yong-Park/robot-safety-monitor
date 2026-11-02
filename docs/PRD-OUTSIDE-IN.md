@@ -214,7 +214,7 @@ P0 승격)이 담당한다.
 | Q-OI-1 | **인지 결과 전송 방식** — UDP / 공유 메모리 / ROS 2 토픽 / 메시지 큐 | Phase 1 초기 | Halos는 인지에 Kafka, 명령에 UDP. 지연 예산(R-OI-08)과 함께 정한다 |
 | Q-OI-2 | **구역 좌표계** — 이미지 좌표 / 월드 좌표 | Phase 1 | 월드 좌표면 카메라 캘리브레이션(R-OI-13)이 P0로 올라온다 |
 | Q-OI-3 | **로봇 식별** — 카메라가 본 로봇이 N대 중 어느 것인지 | Phase 1 | R-OI-07의 전제. 마커 / 위치 추적 / 로봇 자기 보고와의 대조 |
-| Q-OI-4 | **`recommended_action`의 값 집합과 의미** | R-18 구현 전 | Halos의 `REDUCE`는 문서에 정의가 없다. 각 값의 의미를 스키마에 명시해 이 모호함을 물려받지 않는다 |
+| Q-OI-4 | ~~**`recommended_action`의 값 집합과 의미**~~ **해소 (2026-11-02, PRD D27)** — `none` / `slow_down` / `stop`, 각 값은 의도만 정의 | — | Halos의 `REDUCE`는 문서에 정의가 없다. 각 값의 의미를 스키마에 명시해 이 모호함을 물려받지 않는다 |
 | Q-OI-5 | **인지 지연 상한** — 몇 ms부터 `Degraded`인가 | Phase 1 | 30 fps면 한 프레임 33 ms. 스테일 임계를 설정으로 받는다 |
 
 ---
@@ -225,7 +225,7 @@ P0 승격)이 담당한다.
 |---|---|---|
 | `docs/PRD.md` | R-18 P2 → P0 승격, D21 추가, §5.3에 크레이트 둘 | 이 문서와 함께 |
 | `docs/DECISIONS.md` | D21, D-OI-1~7 추가 | 이 문서와 함께 |
-| `rsm-core/src/event.rs` | `SafetyState`에 `recommended_action` 필드, `RecommendedAction` enum 신설 | R-18 구현 시 |
+| `rsm-core/src/event.rs` | `SafetyState`에 `recommended_action` 필드, `RecommendedAction` enum 신설 | **완료 (2026-11-02)** |
 | `docs/ARCHITECTURE_MAP.html` | outside-in 배치 그림 추가 | 구현 착수 시 |
 
 ---

@@ -15,6 +15,7 @@ use serde::Deserialize;
 
 use crate::error::ConfigError;
 use crate::event::ModuleId;
+use crate::event::{MonitorAvailability, RecommendedAction, Severity};
 use crate::intern::Names;
 use crate::registry::Registry;
 use crate::time::Duration;
@@ -39,6 +40,61 @@ pub struct PipelineConfig {
     /// 출력 설정.
     #[serde(default)]
     pub sink: SinkConfig,
+    /// 권고 액션 매핑 (R-18, PRD D27). 없으면 권고는 늘 `none`이다.
+    #[serde(default)]
+    pub recommended_action: Option<RecommendedActionConfig>,
+}
+
+/// 종합 상태 → 권고 매핑 (R-18, PRD D27).
+///
+/// 이 절을 쓰면 **모든 항목을 명시**해야 한다. 기본값을 두지 않는 이유: 특히 감시
+/// 불가일 때 무엇을 권할지는 안전 쪽(멈춤)과 자문 계층(권고 없음) 사이의 판단이고,
+/// 그 판단은 통합자의 몫이다. 기본값이 있으면 그 판단을 우리가 조용히 대신한다.
+///
+/// ```yaml
+/// recommended_action:
+///   by_level: { advisory: none, warning: slow_down, critical: stop }
+///   on_unavailable: stop
+/// ```
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecommendedActionConfig {
+    /// 종합 심각도별 권고. `NONE` 수준은 늘 `none`이라 적지 않는다.
+    pub by_level: LevelActions,
+    /// 감시 불가(`Unavailable`)일 때의 권고. 이때 `level`은 믿을 수 없으므로 수준과
+    /// 무관하게 이 값을 쓴다. `Degraded`는 수준별 매핑을 그대로 쓴다 — 일부는 보고 있다.
+    pub on_unavailable: RecommendedAction,
+}
+
+/// 심각도 수준별 권고.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LevelActions {
+    /// `ADVISORY`일 때.
+    pub advisory: RecommendedAction,
+    /// `WARNING`일 때.
+    pub warning: RecommendedAction,
+    /// `CRITICAL`일 때.
+    pub critical: RecommendedAction,
+}
+
+impl RecommendedActionConfig {
+    /// 종합 상태의 수준과 가용성으로 권고를 정한다.
+    pub const fn resolve(
+        &self,
+        level: Severity,
+        availability: MonitorAvailability,
+    ) -> RecommendedAction {
+        if matches!(availability, MonitorAvailability::Unavailable) {
+            return self.on_unavailable;
+        }
+        match level {
+            Severity::None => RecommendedAction::None,
+            Severity::Advisory => self.by_level.advisory,
+            Severity::Warning => self.by_level.warning,
+            Severity::Critical => self.by_level.critical,
+        }
+    }
 }
 
 /// 주기 그룹 하나.
@@ -220,6 +276,8 @@ pub struct BuiltPipeline {
     pub group_stale_after: Duration,
     /// 출력 설정.
     pub sink: SinkConfig,
+    /// 권고 액션 매핑. `None`이면 권고는 늘 `none`.
+    pub recommended_action: Option<RecommendedActionConfig>,
 }
 
 /// 0 Hz 는 검증에서 막는다(`build`·`check_header`). 0 갈래는 나눗셈을 피하려는 방어선이다.
@@ -310,6 +368,7 @@ impl PipelineConfig {
             arbiter_period: hz_to_period(self.arbiter.period_hz),
             supervisor_period: hz_to_period(self.supervisor.period_hz),
             group_stale_after: Duration::from_millis(self.supervisor.group_stale_after_ms),
+            recommended_action: self.recommended_action,
             sink: self.sink,
         })
     }
@@ -337,6 +396,18 @@ impl PipelineConfig {
         }
         // Supervisor 가 한 scan 동안 `Degraded`로 낮춘 것을 Arbiter 가 적어도 한 번은 봐야
         // Sink 출력에 그 구간이 남는다 (PRD D25·D26). Arbiter 가 더 느리면 조용히 빠진다.
+        if let Some(a) = &self.recommended_action {
+            let l = &a.by_level;
+            if !(l.advisory <= l.warning && l.warning <= l.critical) {
+                return Err(ConfigError::Invalid(format!(
+                    "recommended_action.by_level must not weaken as severity rises \
+                     (advisory {}, warning {}, critical {})",
+                    l.advisory.as_str(),
+                    l.warning.as_str(),
+                    l.critical.as_str()
+                )));
+            }
+        }
         if self.arbiter.period_hz < self.supervisor.period_hz {
             return Err(ConfigError::Invalid(format!(
                 "arbiter period_hz ({}) must be at least supervisor period_hz ({}); \

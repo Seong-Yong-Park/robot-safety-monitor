@@ -7,6 +7,8 @@
 //! [`HazardEvent`]는 `Copy`이고 힙을 쓰지 않는다. 1 kHz tick 경로에서 할당이
 //! 일어나면 안 되기 때문이다(R-08). 이름은 전부 [`crate::intern`]의 정수 ID다.
 
+use serde::Deserialize;
+
 use crate::time::{Duration, Instant};
 
 /// 모듈 식별자. 설정 로드 시 모듈 이름을 인터닝한 결과.
@@ -258,6 +260,41 @@ impl MonitorAvailability {
     }
 }
 
+/// 소비 시스템에 보내는 권고 (R-18, PRD D27). **권고이지 명령이 아니다.**
+///
+/// 이 값을 보고 실제로 무엇을 할지는 로봇 제어기가 정한다. RSM은 액추에이터를 움직이는
+/// 인터페이스를 갖지 않는다(PRD §3, D6). 그래서 각 값은 **의도만** 정의하고 크기나
+/// 방식은 싣지 않는다 — 의미가 정의되지 않은 값(예: "얼마나 줄이라는 건지 모르는
+/// REDUCE")을 만들지 않기 위해서다.
+///
+/// 순서형이다: `None < SlowDown < Stop`. 설정 검증이 "심각도가 높아지는데 권고가
+/// 약해지는" 매핑을 막는 데 이 순서를 쓴다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecommendedAction {
+    /// 권고 없음. 이 상태 때문에 동작을 바꿀 이유가 없다. 기능을 끈 경우(설정에
+    /// `recommended_action` 절이 없음)에도 늘 이 값이다.
+    #[default]
+    None,
+    /// 감속 권고. 지금 속도로 계속 가는 것을 권하지 않는다. 얼마나, 어떻게 줄일지는
+    /// 제어기가 정한다.
+    SlowDown,
+    /// 정지 권고. 움직임을 멈출 것을 권한다. 어떤 방식으로 멈출지(즉시 차단, 제어하며
+    /// 감속 후 정지 등)는 제어기가 정한다.
+    Stop,
+}
+
+impl RecommendedAction {
+    /// 출력·설정에서 쓰는 이름.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::SlowDown => "slow_down",
+            Self::Stop => "stop",
+        }
+    }
+}
+
 /// Arbiter가 산출하는 종합 상태. 소비 시스템이 보는 최종 산출물.
 ///
 /// Arbiter 스레드에서만 만들어지므로 `Vec`을 써도 핫패스 제약과 무관하다.
@@ -269,6 +306,9 @@ pub struct SafetyState {
     pub availability: MonitorAvailability,
     /// 아직 만료되지 않은 이벤트들.
     pub active: Vec<HazardEvent>,
+    /// 권고 (R-18). Arbiter 정책은 `None`으로 두고, Arbiter 스레드가 설정의 매핑으로
+    /// 채운다 — 어떤 정책을 쓰든 같은 규칙이 적용된다.
+    pub recommended_action: RecommendedAction,
     /// 이 상태를 산출한 시각.
     pub updated_at: Instant,
 }
@@ -280,6 +320,7 @@ impl SafetyState {
             level: Severity::None,
             availability: MonitorAvailability::Available,
             active: Vec::new(),
+            recommended_action: RecommendedAction::None,
             updated_at: now,
         }
     }

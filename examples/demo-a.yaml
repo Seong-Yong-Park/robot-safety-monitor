@@ -71,3 +71,12 @@ sink:
   format: jsonl
   path: "-"                 # "-" 는 표준출력
   on_change_only: true      # 상태가 바뀔 때만 한 줄
+
+# 권고 액션 (R-18). 권고이지 명령이 아니다 — 어떻게 할지는 로봇 제어기가 정한다.
+# 이 절이 없으면 권고는 늘 none (demo-b). 쓰면 모든 항목을 적어야 한다 — 기본값이 없다.
+recommended_action:
+  by_level:                 # 심각도가 오를수록 약해지면 설정 오류 (none < slow_down < stop)
+    advisory: none
+    warning: slow_down
+    critical: stop
+  on_unavailable: stop      # 감시 불가일 때. 이 시연은 안전 쪽을 골랐다 — 통합자가 정할 값

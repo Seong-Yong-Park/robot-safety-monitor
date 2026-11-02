@@ -10,7 +10,9 @@
 
 use std::collections::BTreeMap;
 
-use crate::event::{HazardEvent, HazardTypeId, MonitorAvailability, SafetyState, Severity};
+use crate::event::{
+    HazardEvent, HazardTypeId, MonitorAvailability, RecommendedAction, SafetyState, Severity,
+};
 use crate::time::Instant;
 use crate::traits::ArbiterPolicy;
 
@@ -55,6 +57,7 @@ impl ArbiterPolicy for MaxSeverity {
             level,
             availability,
             active,
+            recommended_action: RecommendedAction::None,
             updated_at: now,
         }
     }
