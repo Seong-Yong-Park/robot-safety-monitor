@@ -59,6 +59,8 @@
 
 **결정.** **YAML (`serde_yaml_ng`) + `schemars`.** `deny_unknown_fields` 기본, `serde_yml` 사용 금지(cargo-deny ban 목록에 추가).
 
+
+**`unsafe-libyaml` 관리 중단 권고 (2026-11-02).** `serde_yaml_ng`가 쓰는 `unsafe-libyaml`(libyaml C 코드의 기계 번역)이 RUSTSEC-2024-0449("unmaintained" — 취약점 아님)에 올라 `cargo-deny`가 CI를 실패시켰다. `deny.toml`에 이유와 함께 예외로 두었다. 근거: 파서는 기동 시 로컬 설정 파일 하나만 읽고, tick 경로와 외부 입력에는 없다. **v0.5 공개 전에 순수 Rust YAML 파서로 교체를 다시 검토**한다 — 설정 로더는 serde 기반이라 교체 범위는 작다.
 ---
 
 ## T4. 모듈 레지스트리 메커니즘
@@ -203,6 +205,8 @@
 
 **결정.** 추천안 채택 + 두 항목 조정. **`unsafe`**: `rsm-core`에 `#![forbid(unsafe_code)]`, 불가피한 것은 `rsm-sys`로 격리(`deny(unsafe_op_in_unsafe_fn)` + `// SAFETY:` 주석 강제). **패닉 lint**: `unwrap_used`/`expect_used`/`panic`을 라이브러리 크레이트에 `deny`(바이너리·테스트는 예외), **`indexing_slicing`은 `rsm-core` 핫패스 모듈에만 적용**. **`clippy::pedantic` 켜기**(`warn` 레벨, CI에서 `-D warnings`로 승격, 과한 항목만 개별 `allow`). **의존성**: `cargo-deny` 하나로 통합(licenses 허용 목록·GPL 차단, bans에 `serde_yml`, advisories, sources), `cargo-audit` 별도 도입 안 함. `cargo-geiger`는 참고 지표(게이트 아님), `cargo-vet`/`cargo-crev`는 사업화 단계로 보류. **포맷**: `rustfmt` 기본 + `cargo fmt --check`. CI 순서: fmt → clippy → deny → test → llvm-cov, Miri·loom은 주기 실행.
 
+
+**실행 파일의 시그널 처리 (2026-11-02).** `rsm run`의 Ctrl-C는 **`ctrlc` 크레이트를 `rsm-cli`에만** 넣어 받는다. 시그널 핸들러 등록에는 `unsafe`가 필요한데, 코어 원칙과 같게 그 일을 검증된 크레이트에 맡긴다. `signal-hook`이 아닌 이유: Windows 콘솔의 Ctrl-C도 받아야 한다(Windows는 개발 환경, D16). `libc` 직접 호출(`rsm-sys`)이 아닌 이유: 이 정도 기능에 우리 `unsafe`를 늘릴 이득이 없다. 핸들러는 채널로 알리기만 하고, 멈추는 일은 메인 스레드가 `Runtime::stop`으로 한다. `--duration-ms`가 없으면 Ctrl-C까지 돈다.
 ---
 
 ## T11. ML 추론 런타임 (PRD D14)

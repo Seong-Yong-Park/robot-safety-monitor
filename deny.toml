@@ -34,7 +34,13 @@ targets = [
 [advisories]
 version = 2        # 설정 스키마 버전. cargo-deny 쪽 형식 번호이지 우리 버전이 아니다
 yanked = "deny"    # crates.io 에서 철회(yank)된 버전이 lock 에 있으면 실패
-ignore = []        # 예외를 둘 때 여기에 RUSTSEC-ID 를 적고 **이유를 주석으로 남긴다**
+# 예외를 둘 때 여기에 RUSTSEC-ID 를 적고 **이유를 남긴다**.
+ignore = [
+  # serde_yaml_ng → unsafe-libyaml. 저장소가 보관(archived)되어 관리가 끊겼다는 권고이지,
+  # 알려진 취약점이 아니다. 이 파서는 기동할 때 로컬 설정 파일 하나만 읽는다 — tick 경로에도,
+  # 외부 입력에도 없다. v0.5 공개 전에 순수 Rust YAML 파서로 바꿀지 다시 본다 (TECH_STACK T3).
+  { id = "RUSTSEC-2024-0449", reason = "unmaintained (not a vulnerability); config is a trusted local file parsed once at startup; revisit before public release (TECH_STACK T3)" },
+]
 
 # ── 라이선스 ────────────────────────────────────────────────────────────────
 [licenses]

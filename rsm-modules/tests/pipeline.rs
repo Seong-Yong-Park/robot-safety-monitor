@@ -217,6 +217,22 @@ fn zero_hz_is_rejected_instead_of_silently_becoming_10_hz() {
     assert!(err.contains("period_hz"), "{err}");
 }
 
+#[test]
+fn arbiter_slower_than_supervisor_is_rejected() {
+    // Supervisor 10 Hz 가 100 ms 동안 낮춘 Degraded 를 5 Hz Arbiter 는 못 보고 지나칠 수 있다
+    let err = build_err(&YAML.replace("arbiter: { period_hz: 20 }", "arbiter: { period_hz: 5 }"));
+    assert!(err.contains("supervisor"), "{err}");
+
+    // 같으면 된다
+    let yaml = YAML.replace("arbiter: { period_hz: 20 }", "arbiter: { period_hz: 10 }");
+    assert!(
+        PipelineConfig::from_str(&yaml)
+            .unwrap()
+            .build(&registry())
+            .is_ok()
+    );
+}
+
 // ── 실제 스레드로 기동·정지 ───────────────────────────────────────────────────
 
 struct NullSink;

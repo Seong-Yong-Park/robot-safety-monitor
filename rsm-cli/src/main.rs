@@ -5,18 +5,22 @@
 //!
 //! ```text
 //! rsm check --config examples/demo-a.yaml    # 설정만 검증하고 끝
+//! rsm run   --config examples/demo-a.yaml    # Ctrl-C 로 멈출 때까지
 //! rsm run   --config examples/demo-a.yaml --duration-ms 2000
 //! rsm list                                   # 등록된 모듈 이름
 //! ```
 //!
-//! Phase 0에서는 Ctrl-C 처리를 넣지 않았다. 시그널 핸들러는 외부 크레이트나
-//! `unsafe`가 필요해 [T10 규칙](../../docs/TECH_STACK.md)과 충돌하기 때문이다.
-//! 대신 `--duration-ms` 로 실행 시간을 정한다. Phase 1에서 다시 본다.
+//! Ctrl-C 는 `ctrlc` 크레이트가 받는다. 시그널 핸들러에는 `unsafe`가 필요한데, 그 일을
+//! 이 크레이트에 맡기고 코어는 [`Runtime::stop`](rsm_core::schedule::Runtime::stop)만
+//! 부른다. 의존성은 실행 파일에만 있다 (TECH_STACK T10).
 
 mod jsonl;
 
+use std::fmt::Write as _;
+use std::io::{ErrorKind, Write};
 use std::process::ExitCode;
-use std::sync::Arc;
+use std::sync::{Arc, mpsc};
+use std::time::Duration;
 
 use rsm_core::arbiter::MaxSeverity;
 use rsm_core::config::PipelineConfig;
@@ -30,7 +34,7 @@ const USAGE: &str = "\
 rsm — Robot Safety Monitor
 
 USAGE:
-  rsm run   --config <FILE> [--duration-ms <MILLIS>]
+  rsm run   --config <FILE> [--duration-ms <MILLIS>]   (runs until Ctrl-C if no duration)
   rsm check --config <FILE>
   rsm list
 ";
@@ -38,13 +42,14 @@ USAGE:
 /// 아주 작은 인자 파서. 의존성을 하나 더 들이지 않으려고 손으로 썼다.
 struct Args {
     config: Option<String>,
-    duration_ms: u64,
+    /// 없으면 Ctrl-C 까지 돈다.
+    duration_ms: Option<u64>,
 }
 
 fn parse_args(rest: &[String]) -> Result<Args, String> {
     let mut args = Args {
         config: None,
-        duration_ms: 3_000,
+        duration_ms: None,
     };
     let mut i = 0;
     while i < rest.len() {
@@ -56,9 +61,10 @@ fn parse_args(rest: &[String]) -> Result<Args, String> {
             }
             "--duration-ms" => {
                 let v = rest.get(i + 1).ok_or("--duration-ms requires a value")?;
-                args.duration_ms = v
-                    .parse()
-                    .map_err(|_| format!("--duration-ms is not a number: {v}"))?;
+                args.duration_ms = Some(
+                    v.parse()
+                        .map_err(|_| format!("--duration-ms is not a number: {v}"))?,
+                );
                 i += 2;
             }
             other => return Err(format!("unknown argument: {other}")),
@@ -73,11 +79,21 @@ fn registry() -> Registry {
     reg
 }
 
+/// 표준출력에 쓴다. `rsm list | head -1`처럼 읽는 쪽이 먼저 닫으면(broken pipe)
+/// 오류가 아니라 정상 종료로 본다. `println!`은 이 경우 패닉한다.
+fn print_out(text: &str) -> Result<(), String> {
+    let mut out = std::io::stdout().lock();
+    match out.write_all(text.as_bytes()).and_then(|()| out.flush()) {
+        Err(e) if e.kind() != ErrorKind::BrokenPipe => Err(format!("cannot write to stdout: {e}")),
+        _ => Ok(()),
+    }
+}
+
 fn cmd_check(path: &str) -> Result<(), String> {
     let cfg = PipelineConfig::from_path(std::path::Path::new(path)).map_err(|e| e.to_string())?;
     let built = cfg.build(&registry()).map_err(|e| e.to_string())?;
-    println!(
-        "OK  groups {} · modules {} · signals {}",
+    let mut text = format!(
+        "OK  groups {} · modules {} · signals {}\n",
         built.groups.len(),
         built.module_count,
         built.signal_count
@@ -86,7 +102,9 @@ fn cmd_check(path: &str) -> Result<(), String> {
         let sched = g
             .rt_priority
             .map_or_else(|| "default".to_owned(), |p| format!("SCHED_FIFO {p}"));
-        println!(
+        // String 에 쓰는 일은 실패하지 않는다
+        let _ = writeln!(
+            text,
             "    [{}] {:.1} Hz  source {} · detector {} · sched {sched}",
             g.name,
             1e9_f64 / f64::from(u32::try_from(g.period.as_nanos()).unwrap_or(u32::MAX)),
@@ -94,10 +112,10 @@ fn cmd_check(path: &str) -> Result<(), String> {
             g.detectors.len()
         );
     }
-    Ok(())
+    print_out(&text)
 }
 
-fn cmd_run(path: &str, duration_ms: u64) -> Result<(), String> {
+fn cmd_run(path: &str, duration_ms: Option<u64>) -> Result<(), String> {
     let cfg = PipelineConfig::from_path(std::path::Path::new(path)).map_err(|e| e.to_string())?;
     let built = cfg.build(&registry()).map_err(|e| e.to_string())?;
 
@@ -105,9 +123,22 @@ fn cmd_run(path: &str, duration_ms: u64) -> Result<(), String> {
     let clock: Arc<dyn rsm_core::time::Clock> = Arc::new(MonotonicClock::new());
     let group_names: Vec<String> = built.groups.iter().map(|g| g.name.clone()).collect();
 
+    // 핸들러는 신호를 알리기만 한다. 멈추는 일은 이 스레드가 한다.
+    let (interrupted_tx, interrupted) = mpsc::channel::<()>();
+    ctrlc::set_handler(move || {
+        let _ = interrupted_tx.send(());
+    })
+    .map_err(|e| format!("cannot install the Ctrl-C handler: {e}"))?;
+
     let rt = schedule::run(built, &clock, Box::new(MaxSeverity::new()), Box::new(sink))
         .map_err(|e| e.to_string())?;
-    std::thread::sleep(std::time::Duration::from_millis(duration_ms));
+    let by_ctrl_c = match duration_ms {
+        Some(ms) => interrupted.recv_timeout(Duration::from_millis(ms)).is_ok(),
+        None => interrupted.recv().is_ok(),
+    };
+    if by_ctrl_c {
+        eprintln!("[rsm] Ctrl-C — stopping");
+    }
     rt.stop();
 
     let stats: Vec<_> = (0..group_names.len())
@@ -139,16 +170,17 @@ fn one_decimal(milli: u64) -> String {
     format!("{}.{}", milli / 1_000, milli % 1_000 / 100)
 }
 
-fn cmd_list() {
+fn cmd_list() -> Result<(), String> {
     let reg = registry();
-    println!("source:");
+    let mut text = String::from("source:\n");
     for n in reg.source_names() {
-        println!("  {n}");
+        let _ = writeln!(text, "  {n}");
     }
-    println!("detector:");
+    text += "detector:\n";
     for n in reg.detector_names() {
-        println!("  {n}");
+        let _ = writeln!(text, "  {n}");
     }
+    print_out(&text)
 }
 
 fn dispatch(argv: &[String]) -> Result<(), String> {
@@ -156,10 +188,7 @@ fn dispatch(argv: &[String]) -> Result<(), String> {
         return Err(USAGE.to_owned());
     };
     match sub.as_str() {
-        "list" => {
-            cmd_list();
-            Ok(())
-        }
+        "list" => cmd_list(),
         "check" | "run" => {
             let opts = parse_args(&argv[1..])?;
             let path = opts.config.ok_or("--config is required")?;
@@ -169,10 +198,7 @@ fn dispatch(argv: &[String]) -> Result<(), String> {
                 cmd_run(&path, opts.duration_ms)
             }
         }
-        "--help" | "-h" | "help" => {
-            print!("{USAGE}");
-            Ok(())
-        }
+        "--help" | "-h" | "help" => print_out(USAGE),
         other => Err(format!("unknown command: {other}\n\n{USAGE}")),
     }
 }

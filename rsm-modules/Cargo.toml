@@ -12,7 +12,7 @@ authors.workspace = true
 # 화살표는 modules → core 한 방향뿐이다. core 쪽 Cargo.toml 에 rsm-modules 가
 # 등장하면 순환 의존이라 빌드 자체가 실패한다. 설계 규칙을 빌드가 강제한다.
 [dependencies]
-rsm-core = { path = "../rsm-core" }
+rsm-core = { workspace = true }
 serde = { workspace = true }
 
 # dev-dependencies = 테스트·예제·벤치를 빌드할 때만 쓰는 의존성.

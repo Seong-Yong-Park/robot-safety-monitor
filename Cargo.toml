@@ -43,12 +43,17 @@ authors = ["SeongYong Park"]
 # "1" 은 semver 범위 표기다. `^1.0.0` 과 같은 뜻이고 1.x 전부를 허용한다.
 # 실제로 어느 버전이 쓰였는지는 Cargo.lock 이 고정한다.
 [workspace.dependencies]
+# 내부 크레이트. 경로만 적으면 cargo-deny 는 버전 없는 의존성(wildcard)으로 본다.
+# 버전은 [workspace.package] 와 같게 둔다 — 올릴 때 두 곳을 같이 바꾼다.
+rsm-core = { path = "rsm-core", version = "0.1.0" }
+rsm-modules = { path = "rsm-modules", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }  # 직렬화/역직렬화. derive 로 매크로 사용
 serde_json = "1"                                  # JSONL 출력 (rsm-cli)
 serde_yaml_ng = "0.10"                            # YAML 설정 파싱 (TECH_STACK T3)
 rtrb = "0.3"                                      # wait-free SPSC 링버퍼 (TECH_STACK T5)
 thiserror = "2"                                   # 에러 타입 derive (라이브러리용)
 thread-priority = "3"                             # 그룹 스레드 SCHED_FIFO (TECH_STACK T5). Linux 에서만 쓴다
+ctrlc = "3"                                       # rsm run 의 Ctrl-C (rsm-cli 전용). 시그널 핸들러의 unsafe 를 여기에 맡긴다
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  코딩 규칙 (TECH_STACK T10 / PRD D18)

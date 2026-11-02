@@ -34,7 +34,9 @@
 | D23 | 큐 오버플로는 **들어오는 이벤트를 버리고 `Degraded`**. 블로킹하지 않는다. `Unavailable`이 아니다 — 그룹은 돌고 있다 |
 | D24 | Supervisor 생존은 **Sink 주기 출력(`on_change_only: false`)을 heartbeat로.** 외부 watchdog은 R-21 |
 | D25 | 데드라인 미스는 **scan 구간 판정으로 `Degraded`.** 직전 scan 이후 새 미스가 있으면 `Degraded`, 깨끗한 구간 하나면 회복. `Unavailable`이 아니다. 오버플로도 같은 규칙(D26) |
-| D26 | 큐 오버플로도 **scan 구간 판정으로 회복**(Q-1 해소). 누적 횟수는 통계에 남고, `Degraded` 구간은 JSONL에 남는다. 모듈 `Faulted`는 sticky 유지 |
+| D26 | 큐 오버플로도 **scan 구간 판정으로 회복**(Q-1 해소). 누적 횟수는 통계에 남고, `Degraded` 구간은 JSONL에 남는다(그래서 Arbiter Hz ≥ Supervisor Hz를 설정 검증으로 강제). 모듈 `Faulted`는 sticky 유지 |
+| D27 | 권고 액션(R-18) = **고정 enum + Arbiter 심각도→권고 매핑(설정) + 감시 불가 시 권고 설정 필수**. 절이 없으면 기능 꺼짐. 값 집합은 Q-OI-4 |
+| D28 | JSONL 리플레이 v0.5 범위 = **재생만**(리플레이 Source + `rsm replay` + `insta` 스냅샷). 기록 기능은 그 뒤 |
 
 ## Outside-In 결정 (`PRD-OUTSIDE-IN.md` §7)
 
@@ -54,7 +56,7 @@
 |---|---|---|
 | T1 | 개발 환경 | Phase 0~2 Windows 네이티브. Linux 환경은 Phase 3에 결정 (Ubuntu 24.04 기준) |
 | T2 | 툴체인 | stable + edition 2024, `rust-toolchain.toml`로 1.98.1 고정 |
-| T3 | 설정 포맷 | YAML + `serde_yaml_ng` + `schemars`. `deny_unknown_fields`. `serde_yml` 금지 |
+| T3 | 설정 포맷 | YAML + `serde_yaml_ng` + `schemars`. `deny_unknown_fields`. `serde_yml` 금지. `unsafe-libyaml` 관리 중단 권고는 예외 처리, 공개 전 교체 재검토 |
 | T4 | 레지스트리 | 명시적 등록 함수. 팩토리 `fn(&Params) -> Result<Box<dyn Detector>>` 고정 |
 | T5 | 스레드·큐 | `std::thread` + `thread-priority` + `rtrb`(전 구간 SPSC). **tokio 미사용**. 놓친 주기는 건너뛰고 위상 유지. 그룹별 `rt_priority`(SCHED_FIFO, Linux 전용) — 적용 못 하면 기동 실패. `timerfd`는 하지 않고, spin은 전용 Linux 측정 뒤 결정 |
 | T6 | 시간 | 자체 `Instant(u64 ns)` newtype + `trait Clock`. `MonotonicClock` / `VirtualClock` / (Phase 3) `RosClock` |

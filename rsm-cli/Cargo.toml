@@ -22,9 +22,10 @@ name = "rsm"
 path = "src/main.rs"
 
 [dependencies]
-rsm-core = { path = "../rsm-core" }
-rsm-modules = { path = "../rsm-modules" }
+rsm-core = { workspace = true }
+rsm-modules = { workspace = true }
 serde_json = { workspace = true }   # JSONL 출력
+ctrlc = { workspace = true }        # Ctrl-C 로 멈춘다. 코어에는 넣지 않는다
 # 인자 파서(clap 등)를 일부러 넣지 않았다. 의존성 하나를 아끼려고 main.rs 에
 # 30줄짜리 파서를 손으로 썼다. 옵션이 늘어나면 그때 다시 판단한다.
 

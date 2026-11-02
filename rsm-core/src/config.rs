@@ -335,6 +335,15 @@ impl PipelineConfig {
                 "arbiter and supervisor period_hz must be greater than 0".to_owned(),
             ));
         }
+        // Supervisor 가 한 scan 동안 `Degraded`로 낮춘 것을 Arbiter 가 적어도 한 번은 봐야
+        // Sink 출력에 그 구간이 남는다 (PRD D25·D26). Arbiter 가 더 느리면 조용히 빠진다.
+        if self.arbiter.period_hz < self.supervisor.period_hz {
+            return Err(ConfigError::Invalid(format!(
+                "arbiter period_hz ({}) must be at least supervisor period_hz ({}); \
+                 otherwise short Degraded windows can be missed in the output",
+                self.arbiter.period_hz, self.supervisor.period_hz
+            )));
+        }
         Ok(())
     }
 

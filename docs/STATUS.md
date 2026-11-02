@@ -14,17 +14,17 @@ Linux에서 한다(아직 장비 없음).
 
 | 영역 | 상태 |
 |---|---|
-| 의사결정 | **완료** — PRD v0.3(D1~D26), TECH_STACK v1.0(T1~T16). 열린 질문 0 |
+| 의사결정 | **완료** — PRD v0.3(D1~D28), TECH_STACK v1.0(T1~T16). 열린 질문 0 (R-18 값 집합은 outside-in Q-OI-4) |
 | Outside-in | **PRD 초안** — `docs/PRD-OUTSIDE-IN.md` v0.1, 결정 D-OI-1~7, 열린 질문 5. 구현 미착수 |
 | 빌드·규칙 인프라 | **완료** — 워크스페이스, 툴체인 고정, clippy·cargo-deny 정책 |
-| CI 워크플로 | 파일 작성됨, `.github/workflows/`에 배치 필요 |
+| CI 워크플로 | **동작 중** — `ci.yml`(clippy·test: ubuntu/windows, aarch64 빌드, `cargo-deny`), `heavy.yml`(주기 실행) |
 | 문서 | README·CONTRIBUTING·BRIEF·DECISIONS·이 문서 |
 | git | 로컬 저장소 + remote 연결. push 는 사용자가 한다 |
 | **rsm-core** | **완료** — 12개 모듈 전부 구현, 단위 테스트 60 + doctest 1 |
-| **rsm-modules** | **완료** — Source 3종 · Detector 4종, 단위 8 + 통합 8 |
-| **rsm-cli** | **완료** — `rsm run` / `rsm check` / `rsm list`, JSONL 출력. 그룹별 지터 요약 |
+| **rsm-modules** | **완료** — Source 3종 · Detector 4종, 단위 8 + 통합 9 |
+| **rsm-cli** | **완료** — `rsm run` / `rsm check` / `rsm list`, JSONL 출력. 그룹별 지터 요약, Ctrl-C 정지 |
 | **rsm-alloc-check** | **완료** — 시험 전용 계측 할당자. 계측기 자체 시험 5 + fast 경로 시험 1 + doctest 1 |
-| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, rustdoc 링크 경고 0, 테스트 84 통과, fast tick 경로 할당 0 |
+| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, rustdoc 링크 경고 0, 테스트 85 통과, fast tick 경로 할당 0 |
 
 ### rsm-core 모듈
 
@@ -178,8 +178,10 @@ Windows에서 개발할 때는 `fast` 그룹 주기를 200 Hz 정도로 낮춰 �
 - [x] 그룹 스레드 우선순위 — 그룹 설정 `rt_priority`(SCHED_FIFO), 못 얻으면 기동 실패 (2026-11-02)
 - [x] `timerfd`·spin 검토 — `timerfd`는 안 함, spin은 아래 재측정 뒤 결정 (TECH_STACK T5)
 - [ ] **전용 Linux에서 지터 재측정** — G4 공식 수치. `tools/jitter.sh -p 80`. **장비 필요(사람)**
-- [ ] `--duration-ms` 대신 Ctrl-C 처리 (시그널 핸들러 의존성 결정 필요)
-- [ ] JSONL 리플레이 — 기록한 줄을 `VirtualClock`으로 되돌려 같은 결과가 나오는지
+- [x] Ctrl-C 처리 — `ctrlc`를 `rsm-cli`에만, `--duration-ms` 없으면 Ctrl-C까지 (TECH_STACK T10, 2026-11-02)
+- [x] Arbiter Hz ≥ Supervisor Hz 설정 검증 — `Degraded` 구간이 출력에서 빠지지 않게 (PRD D26, 2026-11-02)
+- [ ] **JSONL 리플레이** — v0.5 범위는 재생만: 리플레이 Source + `rsm replay` + `insta` 스냅샷 (PRD D28)
+- [ ] **권고 액션 R-18** — 구조는 PRD D27로 확정. 값 집합(outside-in Q-OI-4)을 정한 뒤 구현. v0.5 전
 - [ ] 메트릭 파사드 (T7)
 - [ ] `rsm-core` 공개 API 문서 정리 + mdBook (나중)
 
@@ -187,9 +189,8 @@ Windows에서 개발할 때는 `fast` 그룹 주기를 200 Hz 정도로 낮춰 �
 
 | 항목 | 조치 |
 |---|---|
-| `LICENSE`가 자리표시자 | `Invoke-WebRequest https://www.apache.org/licenses/LICENSE-2.0.txt -OutFile LICENSE` |
-| CI 워크플로 미배치 | `.github/workflows/ci.yml`·`heavy.yml` 저장 후 커밋 |
-| `Cargo.toml`의 `repository` | `https://github.com/OWNER/...` 자리표시자 → 실제 주소로 |
+| `Cargo.toml`의 `repository` | `https://github.com/OWNER/...` 자리표시자 → 공개할 저장소 주소가 정해지면 확정 |
+| YAML 파서의 `unsafe-libyaml` | 관리 중단 권고(RUSTSEC-2024-0449)를 `deny.toml`에서 예외 처리 중 → 공개 전 교체 재검토 (TECH_STACK T3) |
 
 ## 마일스톤
 
