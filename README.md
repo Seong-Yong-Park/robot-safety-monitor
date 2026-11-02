@@ -78,7 +78,7 @@ cargo doc --workspace --no-deps --open
 
 ## 공개 전 할 일
 
-- [ ] `LICENSE`를 Apache-2.0 정본으로 교체
+- [x] `LICENSE`를 Apache-2.0 정본으로 교체
 - [ ] `Cargo.toml`의 `repository` URL 확정
 - [ ] v0.5 범위 완료 (코어 + 레퍼런스 모듈 3종 + JSONL 리플레이)
 
