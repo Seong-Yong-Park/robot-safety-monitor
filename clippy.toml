@@ -24,3 +24,20 @@ disallowed-methods = [
   { path = "std::time::Instant::now", reason = "inject the Clock trait instead" },
   { path = "std::time::SystemTime::now", reason = "wall-clock time must not drive judgements (it can jump backwards)" },
 ]
+
+# ── 계측 매크로는 배출 지점 한 곳에서만 (TECH_STACK T7) ──────────────────────
+#
+# 왜: `metrics` 매크로는 설치된 레코더에 따라 해시 조회·락·할당을 한다. 1 kHz tick
+# 경로에 들어가면 R-08(할당 0)과 지터가 레코더 구현에 달리게 된다. tick 경로는
+# HealthRegistry 의 원자 슬롯에만 쓰고, Supervisor 스레드가 그 값을 옮긴다.
+#
+# 유일한 예외는 rsm-core/src/telemetry.rs 이며, 파일 머리의
+# #![allow(clippy::disallowed_macros, reason = "...")] 로 명시적으로 허용한다.
+disallowed-macros = [
+  { path = "metrics::counter", reason = "only rsm-core/src/telemetry.rs may touch the metrics facade" },
+  { path = "metrics::gauge", reason = "only rsm-core/src/telemetry.rs may touch the metrics facade" },
+  { path = "metrics::histogram", reason = "only rsm-core/src/telemetry.rs may touch the metrics facade" },
+  { path = "metrics::describe_counter", reason = "only rsm-core/src/telemetry.rs may touch the metrics facade" },
+  { path = "metrics::describe_gauge", reason = "only rsm-core/src/telemetry.rs may touch the metrics facade" },
+  { path = "metrics::describe_histogram", reason = "only rsm-core/src/telemetry.rs may touch the metrics facade" },
+]

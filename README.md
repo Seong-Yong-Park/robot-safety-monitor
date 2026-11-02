@@ -27,6 +27,9 @@ cargo run --release -p rsm-cli --bin rsm -- replay --config examples/replay-a.ya
 `replay`는 적어 둔 신호(`examples/replay-a.jsonl`, 한 줄에 `t_ms`·`signal`·`value`)를 가상 시각으로
 재생한다. 기다리지 않고 끝나며, 같은 입력이면 출력이 늘 같다 — 실기 없이 구성을 회귀 시험하는 방법이다.
 
+`run`·`replay`에 `--metrics-json <PATH>`를 붙이면 끝날 때 계측 요약(그룹별 tick·미스·유실·지터 백분위,
+모듈별 고장·상태, 가용성)을 JSON으로 쓴다. 계측은 `metrics` 파사드를 거치므로 다른 레코더로 바꿔 끼울 수 있다.
+
 `demo-a.yaml`(팔, 2개 주기 그룹)과 `demo-b.yaml`(이동로봇, 고장 시연)은
 **같은 바이너리**가 읽는다. 조합이 달라져도 코드는 바뀌지 않는다.
 

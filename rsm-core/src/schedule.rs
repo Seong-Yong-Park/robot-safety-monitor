@@ -40,6 +40,7 @@ use crate::event::{HazardEvent, MonitorAvailability, Severity};
 use crate::intern::Names;
 use crate::signal::SignalBus;
 use crate::supervisor::HealthRegistry;
+use crate::telemetry::MetricsExporter;
 use crate::time::{Clock, Duration, Instant};
 use crate::traits::{ArbiterPolicy, EventSink, Health, Sink};
 
@@ -353,6 +354,7 @@ pub fn run(
 
     let health = Arc::new(HealthRegistry::new(module_count, groups.len()));
     let names = Arc::new(names);
+    let group_names: Vec<String> = groups.iter().map(|g| g.name.clone()).collect();
     let stop = Arc::new(AtomicBool::new(false));
     let mut handles = Vec::with_capacity(groups.len() + 2);
     let mut consumers = Vec::with_capacity(groups.len());
@@ -393,13 +395,19 @@ pub fn run(
     keep_or_abort(&mut handles, &stop, spawned)?;
 
     let (clock_s, health_s, stop_s) = (Arc::clone(clock), Arc::clone(&health), Arc::clone(&stop));
+    let names_s = Arc::clone(&names);
     let spawned = spawn_named("rsm-supervisor", move || {
+        // 계측 배출도 이 스레드가 한다 — tick 경로 밖이고, scan 직후라 값이 가장 새롭다.
+        let exporter = MetricsExporter::new(&group_names, &names_s.modules);
         let mut release = clock_s.now();
         while !stop_s.load(Ordering::Relaxed) {
             health_s.scan(clock_s.now(), group_stale_after);
+            exporter.publish(&health_s);
             release = next_release(release, clock_s.now(), supervisor_period);
             sleep_until(&*clock_s, release);
         }
+        // 멈출 때 한 번 더. 종료 시 요약이 마지막 scan 이후의 tick 까지 담게.
+        exporter.publish(&health_s);
     });
     keep_or_abort(&mut handles, &stop, spawned)?;
 
@@ -442,6 +450,8 @@ pub fn replay(
     } = pipeline;
 
     let health = Arc::new(HealthRegistry::new(module_count, groups.len()));
+    let group_names: Vec<String> = groups.iter().map(|g| g.name.clone()).collect();
+    let exporter = MetricsExporter::new(&group_names, &names.modules);
     let mut workers = Vec::with_capacity(groups.len());
     let mut consumers = Vec::with_capacity(groups.len());
     for (index, plan) in groups.into_iter().enumerate() {
@@ -484,6 +494,7 @@ pub fn replay(
         }
         if next_sup == now {
             health.scan(now, group_stale_after);
+            exporter.publish(&health);
             next_sup = now + step(supervisor_period);
         }
         if next_arb == now {
@@ -491,6 +502,7 @@ pub fn replay(
             next_arb = now + step(arbiter_period);
         }
     }
+    exporter.publish(&health);
     health
 }
 

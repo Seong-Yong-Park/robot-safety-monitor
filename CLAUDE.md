@@ -54,6 +54,8 @@ rsm-cli  ──▶  rsm-modules  ──▶  rsm-core
   `rsm-alloc-check`의 `GlobalAlloc` 구현 하나뿐이다.
 - tick 경로를 바꾸면 `cargo test -p rsm-alloc-check`가 할당 0을 확인한다. 실패 메시지에
   몇 번째 tick에서 몇 번 할당했는지 나온다.
+- `metrics` 매크로는 `rsm-core/src/telemetry.rs`에서만 쓴다(clippy `disallowed-macros`). 새 계측은
+  `HealthRegistry`에 원자 값으로 쌓고 `MetricsExporter::publish`에서 옮긴다 — tick 경로에서 직접 부르지 않는다.
 - 리플레이 스냅샷(`rsm-modules/tests/snapshots/`)이 바뀌면 **diff를 읽고 의도한 변화일 때만**
   `INSTA_UPDATE=always cargo test -p rsm-modules --test replay`로 갱신한다. 읽지 않고 갱신하면 시험이 무의미하다.
 - 지터(시작 지연 P50/P99)는 `tools/jitter.sh`로 잰다(Linux 전용, 부하 없음 / CPU 부하 각 3회).
@@ -74,7 +76,7 @@ rsm-cli  ──▶  rsm-modules  ──▶  rsm-core
 ```bash
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings   # 경고 0 이어야 한다
-cargo test --workspace                                   # 현재 100개
+cargo test --workspace                                   # 현재 103개
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items  # 깨진 문서 링크 0
 # unsafe·tick 경로를 건드렸으면 (nightly, 수 분 걸림):
 cargo +nightly miri test -p rsm-alloc-check

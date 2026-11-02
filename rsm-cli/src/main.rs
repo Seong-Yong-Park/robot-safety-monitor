@@ -30,6 +30,7 @@ use rsm_core::config::PipelineConfig;
 use rsm_core::registry::Registry;
 use rsm_core::schedule;
 use rsm_core::time::MonotonicClock;
+use rsm_modules::metrics_summary::SummaryRecorder;
 use rsm_modules::sinks::JsonlSink;
 
 const USAGE: &str = "\
@@ -40,6 +41,9 @@ USAGE:
   rsm replay --config <FILE> --duration-ms <MILLIS>     (virtual time, as fast as possible)
   rsm check  --config <FILE>
   rsm list
+
+OPTIONS (run, replay):
+  --metrics-json <PATH>   write a metrics summary (JSON array) to PATH on exit
 ";
 
 /// 아주 작은 인자 파서. 의존성을 하나 더 들이지 않으려고 손으로 썼다.
@@ -47,12 +51,15 @@ struct Args {
     config: Option<String>,
     /// 없으면 Ctrl-C 까지 돈다.
     duration_ms: Option<u64>,
+    /// 종료 시 계측 요약을 쓸 파일 (TECH_STACK T7).
+    metrics_json: Option<String>,
 }
 
 fn parse_args(rest: &[String]) -> Result<Args, String> {
     let mut args = Args {
         config: None,
         duration_ms: None,
+        metrics_json: None,
     };
     let mut i = 0;
     while i < rest.len() {
@@ -68,6 +75,11 @@ fn parse_args(rest: &[String]) -> Result<Args, String> {
                     v.parse()
                         .map_err(|_| format!("--duration-ms is not a number: {v}"))?,
                 );
+                i += 2;
+            }
+            "--metrics-json" => {
+                let v = rest.get(i + 1).ok_or("--metrics-json requires a path")?;
+                args.metrics_json = Some(v.clone());
                 i += 2;
             }
             other => return Err(format!("unknown argument: {other}")),
@@ -219,16 +231,29 @@ fn dispatch(argv: &[String]) -> Result<(), String> {
         "check" | "run" | "replay" => {
             let opts = parse_args(&argv[1..])?;
             let path = opts.config.ok_or("--config is required")?;
+            if sub == "check" && opts.metrics_json.is_some() {
+                return Err("--metrics-json applies to run and replay only".to_owned());
+            }
+            // 레코더는 파이프라인이 계측 핸들을 등록하기 **전에** 설치해야 한다.
+            let recorder = opts.metrics_json.as_ref().map(|_| SummaryRecorder::new());
+            if let Some(r) = &recorder {
+                r.install_global()?;
+            }
             match sub.as_str() {
-                "check" => cmd_check(&path),
-                "run" => cmd_run(&path, opts.duration_ms),
+                "check" => cmd_check(&path)?,
+                "run" => cmd_run(&path, opts.duration_ms)?,
                 // 재생은 끝을 정해야 한다. 파일이 끝난 뒤의 낡음·끊김도 결과의 일부다.
                 _ => cmd_replay(
                     &path,
                     opts.duration_ms
                         .ok_or("replay requires --duration-ms (virtual time)")?,
-                ),
+                )?,
             }
+            if let (Some(r), Some(out)) = (&recorder, &opts.metrics_json) {
+                std::fs::write(out, r.to_json() + "\n")
+                    .map_err(|e| format!("cannot write metrics summary to `{out}`: {e}"))?;
+            }
+            Ok(())
         }
         "--help" | "-h" | "help" => print_out(USAGE),
         other => Err(format!("unknown command: {other}\n\n{USAGE}")),

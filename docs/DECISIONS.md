@@ -60,7 +60,7 @@
 | T4 | 레지스트리 | 명시적 등록 함수. 팩토리 `fn(&Params) -> Result<Box<dyn Detector>>` 고정 |
 | T5 | 스레드·큐 | `std::thread` + `thread-priority` + `rtrb`(전 구간 SPSC). **tokio 미사용**. 놓친 주기는 건너뛰고 위상 유지. 그룹별 `rt_priority`(SCHED_FIFO, Linux 전용) — 적용 못 하면 기동 실패. `timerfd`는 하지 않고, spin은 전용 Linux 측정 뒤 결정 |
 | T6 | 시간 | 자체 `Instant(u64 ns)` newtype + `trait Clock`. `MonotonicClock` / `VirtualClock` / (Phase 3) `RosClock` |
-| T7 | 로깅·계측 | 3분리 — Sink `serde_json` / 진단 `tracing` / 계측 핫패스 고정 슬롯 → `metrics`. 지연 분포는 고정 칸 히스토그램(로그-선형, 오차 ≤ 6.25%, 칸 상한으로 보고) |
+| T7 | 로깅·계측 | 3분리 — Sink `serde_json` / 진단 `tracing` / 계측 핫패스 고정 슬롯 → `metrics`. 지연 분포는 고정 칸 히스토그램(로그-선형, 오차 ≤ 6.25%, 칸 상한으로 보고). 배출은 Supervisor 스레드의 `MetricsExporter` 한 곳(매크로는 clippy로 그 밖에서 금지), v1 exporter는 `--metrics-json` 요약 |
 | T8 | 에러·패닉 | `thiserror` + `anyhow` + `panic = "unwind"` + 모듈 tick `catch_unwind` + 패닉 모듈 **영구 `Faulted`** (재시작 정책은 P1 R-25. 2026-09-27 코드에 맞춰 변경) |
 | T9 | 테스트 | `proptest`·`insta`·`loom`·Miri·`criterion`·`llvm-cov`·할당 카운터 (단계별 도입). 할당 카운터는 시험 전용 `rsm-alloc-check`에 격리 |
 | T10 | 코딩 규칙 | core `forbid(unsafe_code)` / `clippy::pedantic` / `unwrap`·`expect`·`panic` deny / `indexing_slicing`은 핫패스 한정 / `cargo-deny` |

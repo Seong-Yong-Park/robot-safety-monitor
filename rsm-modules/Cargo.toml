@@ -15,6 +15,7 @@ authors.workspace = true
 rsm-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }   # 리플레이 입력 파싱, JSONL 출력
+metrics = { workspace = true }      # 요약 JSON 레코더(metrics_summary.rs)
 
 # dev-dependencies = 테스트·예제·벤치를 빌드할 때만 쓰는 의존성.
 # 실제 배포 바이너리에는 들어가지 않는다. 여기서는 테스트에서 YAML 파라미터를

@@ -246,6 +246,9 @@ for detector in detectors: detector.tick(now, &bus, out)
 직전에 본 수(`misses_seen`·`overflows_seen`)는 Supervisor만 쓴다. 그룹 스레드의 fast 경로에는
 아무것도 더해지지 않는다.
 
+Supervisor 스레드는 scan 직후 `telemetry.rs`의 `MetricsExporter::publish`로 이 표의 값을 `metrics` 파사드에
+옮긴다. 파사드 매크로는 그 파일에서만 허용된다(clippy) — 1 kHz 루프는 원자 변수만 건드린다.
+
 **모든 필드가 원자 변수다.** Supervisor는 큐를 쓰지 않는다. 그룹 스레드가 tick
 끝에 카운터를 올리고, Supervisor가 주기적으로 읽는다. 큐를 쓰면 큐가 막혔을 때
 건강 정보도 같이 막히는데, 그건 정확히 알아야 할 때 못 알게 되는 구조다.

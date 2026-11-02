@@ -34,6 +34,7 @@
 //! | [`schedule`] | 주기 그룹·Arbiter·Supervisor 스레드 (R-07, R-08) | [`run`](schedule::run) |
 //! | [`arbiter`] | max-severity + TTL 융합 정책 (R-05) | [`MaxSeverity`](arbiter::MaxSeverity) |
 //! | [`supervisor`] | 모듈·그룹 건강 감시, 가용성 판정 (R-06) | [`HealthRegistry`](supervisor::HealthRegistry) |
+//! | [`telemetry`] | 건강 표 → `metrics` 파사드 배출 (TECH_STACK T7) | [`MetricsExporter`](telemetry::MetricsExporter) |
 //! | [`error`] | 설정·기동 오류 | [`ConfigError`](error::ConfigError) |
 
 pub mod arbiter;
@@ -46,5 +47,6 @@ pub mod registry;
 pub mod schedule;
 pub mod signal;
 pub mod supervisor;
+pub mod telemetry;
 pub mod time;
 pub mod traits;

@@ -21,8 +21,10 @@
 //! | `panic_probe` | 일부러 패닉한다. 격리(R-07) 시연용 |
 //!
 //! 출력 Sink는 [`sinks::JsonlSink`] 하나다. 설정의 `sink:` 절이 고른다.
+//! 계측 레코더는 [`metrics_summary::SummaryRecorder`] — 종료 시 요약 JSON (TECH_STACK T7).
 
 pub mod detectors;
+pub mod metrics_summary;
 pub mod replay;
 pub mod sinks;
 pub mod sources;

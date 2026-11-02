@@ -144,6 +144,13 @@
 
 **고정 슬롯의 지연 분포 (2026-11-02).** 지터 P99(PRD §7)를 내려면 평균·최대로는 부족하다. 그룹 슬롯에 **고정 칸 지연 히스토그램**(`rsm-core/src/histogram.rs`)을 둔다 — 원자 카운터 322칸, 1 µs 미만 한 칸 + 2배 구간마다 16칸(로그-선형, 상대 오차 ≤ 6.25%) + 약 1 s 이상 한 칸, 그룹당 약 2.6 KB를 초기화 때 잡는다. tick마다 원자 덧셈 한 번이라 할당·락이 없다(`rsm-alloc-check`가 확인). 백분위는 해당 칸의 **상한**으로 보고해 실제보다 작게 나오지 않게 하고, 관측 최대로 자른다. 원시 표본 링버퍼는 표본 자체가 필요해질 때(리플레이·`metrics` 배출) 추가한다. HDR Histogram 크레이트를 쓰지 않은 이유: 칸 배치가 고정이면 이 정도는 100줄이고, 외부 크레이트의 내부 할당 여부를 따로 검증할 필요가 없다.
 
+**파사드 배출 구현 (2026-11-02).** (c)를 이렇게 구현했다.
+- **배출 지점은 `rsm-core/src/telemetry.rs`의 `MetricsExporter` 하나.** 그룹·모듈별 핸들을 시작할 때 한 번 등록하고, **Supervisor 스레드**가 scan 직후마다 `publish`로 건강 표의 원자 값을 옮긴다(멈출 때 한 번 더). 별도 배출 스레드를 두지 않은 이유: Supervisor는 이미 tick 경로 밖에서 같은 값을 읽는 주기 스레드다. 리플레이(`schedule::replay`)도 같은 자리에서 배출한다.
+- **매크로 금지는 워크스페이스 전체.** `clippy.toml`의 `disallowed-macros`가 `metrics::counter!` 등을 막고, `telemetry.rs`만 파일 머리에서 허용한다. 처음 계획은 "핫패스 모듈에만 적용"이었지만, 금지를 기본으로 하고 예외를 한 곳에 두는 편이 더 강하고 단순하다(`disallowed-methods`의 시계 규칙과 같은 방식). tick 경로에 매크로를 넣으면 clippy가 실패함을 확인했다.
+- **이름**: `rsm_availability`, `rsm_group_{ticks,deadline_misses,queue_overflows}_total`, `rsm_group_late_{p50,p99,p999,max}_ns`, `rsm_group_work_max_ns`, `rsm_module_faults_total`, `rsm_module_health`. 상태값 게이지는 0/1/2(정상 쪽이 0). Prometheus 관례(`_total`, 단위 접미사)를 미리 따른다.
+- **분포는 히스토그램이 아니라 게이지로** 보낸다. 코어가 이미 고정 칸 히스토그램으로 백분위를 냈고, 파사드 히스토그램은 레코더마다 버킷이 달라 같은 값이 나온다는 보장이 없다.
+- **v1 exporter = `rsm-modules`의 `SummaryRecorder`**(원자 변수만 쓰는 작은 레코더). `rsm run|replay --metrics-json <PATH>`가 설치하고, 끝나면 이름순 JSON 배열로 쓴다. 외부 레코더 크레이트(`metrics-util` 등)는 들이지 않았다. Prometheus는 P1(R-14)에서 이 자리에 다른 레코더로 붙는다.
+
 ---
 
 ## T8. 에러 처리 · 패닉 격리
@@ -379,7 +386,7 @@ robot-safety-monitor/
 | T4 | 레지스트리 | **명시적 등록 함수**, 팩토리 `fn(&Params) -> Result<Box<dyn Detector>>` 고정 |
 | T5 | 스레드·큐 | **`std::thread` + `thread-priority` + `rtrb`**(전 구간 SPSC 정규화), tokio 미사용. 놓친 주기는 건너뛰고 위상 유지. 그룹별 `rt_priority`(SCHED_FIFO), 적용 못 하면 기동 실패. `timerfd` 안 함, spin은 전용 Linux 측정 뒤 결정 |
 | T6 | 시간 | **자체 `Instant(u64 ns)` + `trait Clock`**, `MonotonicClock`·`VirtualClock`(v1), `RosClock`(Phase 3) |
-| T7 | 로깅·계측 | **3분리** — Sink `serde_json` / 진단 `tracing` / 계측 핫패스 고정 슬롯(원자 카운터 + 고정 칸 지연 히스토그램) → `metrics` |
+| T7 | 로깅·계측 | **3분리** — Sink `serde_json` / 진단 `tracing` / 계측 핫패스 고정 슬롯(원자 카운터 + 고정 칸 지연 히스토그램) → Supervisor가 `metrics` 파사드로 배출, 매크로는 `telemetry.rs`만. v1 exporter = 종료 시 요약 JSON |
 | T8 | 에러·패닉 | **`thiserror` + `anyhow` + unwind + 모듈 tick `catch_unwind` + 패닉 모듈 영구 `Faulted`** (재시작 정책은 P1 R-25) |
 | T9 | 테스트 | **전체 채택** `proptest`·`insta`·`loom`·Miri·`criterion`·`llvm-cov`·할당 카운터, 도입은 단계별. 할당 카운터는 시험 전용 크레이트 `rsm-alloc-check` |
 | T10 | 코딩 규칙 | core `forbid(unsafe_code)`, **`pedantic` 켬**, `indexing_slicing`은 핫패스 한정, `cargo-deny` 단일화 |

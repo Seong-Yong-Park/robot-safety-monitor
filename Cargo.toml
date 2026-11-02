@@ -53,6 +53,7 @@ serde_yaml_ng = "0.10"                            # YAML 설정 파싱 (TECH_STA
 rtrb = "0.3"                                      # wait-free SPSC 링버퍼 (TECH_STACK T5)
 thiserror = "2"                                   # 에러 타입 derive (라이브러리용)
 thread-priority = "3"                             # 그룹 스레드 SCHED_FIFO (TECH_STACK T5). Linux 에서만 쓴다
+metrics = "0.24"                                  # 계측 파사드 (TECH_STACK T7). 매크로는 rsm-core/src/telemetry.rs 에서만
 insta = "1"                                       # 스냅샷 시험 (TECH_STACK T9). dev-dependency 로만 쓴다
 ctrlc = "3"                                       # rsm run 의 Ctrl-C (rsm-cli 전용). 시그널 핸들러의 unsafe 를 여기에 맡긴다
 

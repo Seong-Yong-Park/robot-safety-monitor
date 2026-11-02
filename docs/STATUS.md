@@ -4,11 +4,10 @@
 
 ## 한 줄
 
-**Phase 1 진행 중.** Phase 0(설정 하나로 조립되는 파이프라인, `demo-a`·`demo-b`)이
-끝났다. Phase 1에서 **주기 준수 계측 수정**, **데드라인 미스 → `Degraded`**,
-**tick 경로 할당 0 검증**, **지터 측정 하네스**, **그룹 스레드 SCHED_FIFO**를 마쳤다.
-지터 P99는 WSL2에서 주기의 56%(SCHED_FIFO)로 목표(10%)를 못 맞춘다 — 공식 판정은 전용
-Linux에서 한다(아직 장비 없음).
+**Phase 1 구현 완료, v0.5 기능 완료.** Phase 0(설정 하나로 조립되는 파이프라인)에 이어
+Phase 1의 주기 계측·할당 0·지터 하네스·SCHED_FIFO·메트릭 파사드, v0.5의 권고 액션(R-18)·
+JSONL 리플레이(R-10)를 마쳤다. 남은 판정은 **지터 P99**(WSL2에서 주기의 56%, 목표 10%) —
+공식 수치는 전용 보드에서 잰다(준비 중).
 
 ## 무엇이 되어 있나
 
@@ -20,11 +19,11 @@ Linux에서 한다(아직 장비 없음).
 | CI 워크플로 | **동작 중** — `ci.yml`(clippy·test: ubuntu/windows, aarch64 빌드, `cargo-deny`), `heavy.yml`(주기 실행) |
 | 문서 | README·CONTRIBUTING·BRIEF·DECISIONS·이 문서 |
 | git | 로컬 저장소 + remote 연결. push 는 사용자가 한다 |
-| **rsm-core** | **완료** — 12개 모듈 전부 구현, 단위 테스트 62 + doctest 1 |
-| **rsm-modules** | **완료** — Source 4종(리플레이 포함) · Detector 4종 · JSONL Sink, 단위 13 + 통합 17 (스냅샷 2) |
+| **rsm-core** | **완료** — 13개 모듈 전부 구현, 단위 테스트 62 + doctest 1 |
+| **rsm-modules** | **완료** — Source 4종(리플레이 포함) · Detector 4종 · JSONL Sink · 요약 JSON 레코더, 단위 13 + 통합 20 (스냅샷 2) |
 | **rsm-cli** | **완료** — `rsm run` / `rsm replay` / `rsm check` / `rsm list`. 그룹별 지터 요약, Ctrl-C 정지 |
 | **rsm-alloc-check** | **완료** — 시험 전용 계측 할당자. 계측기 자체 시험 5 + fast 경로 시험 1 + doctest 1 |
-| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, rustdoc 링크 경고 0, 테스트 100 통과, fast tick 경로 할당 0 |
+| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, rustdoc 링크 경고 0, 테스트 103 통과, fast tick 경로 할당 0 |
 
 ### rsm-core 모듈
 
@@ -41,6 +40,7 @@ Linux에서 한다(아직 장비 없음).
 | `arbiter.rs` | `MaxSeverity` 융합 정책 |
 | `supervisor.rs` | `HealthRegistry`(원자변수), 그룹 스테일·오버플로·고장·데드라인 미스 판정, 주기 통계(미스·시작 지연·작업 시간) |
 | `histogram.rs` | 고정 칸 지연 히스토그램(크레이트 내부). 시작 지연 P50/P99/P99.9 |
+| `telemetry.rs` | `MetricsExporter` — 건강 표 → `metrics` 파사드. 매크로가 허용되는 유일한 파일 |
 | `error.rs` | `ConfigError` |
 
 ### rsm-modules
@@ -182,7 +182,7 @@ Windows에서 개발할 때는 `fast` 그룹 주기를 200 Hz 정도로 낮춰 �
 - [x] Arbiter Hz ≥ Supervisor Hz 설정 검증 — `Degraded` 구간이 출력에서 빠지지 않게 (PRD D26, 2026-11-02)
 - [x] **JSONL 리플레이** — `type: replay` Source + 가상 시각 `schedule::replay` + `rsm replay` + `insta` 스냅샷 2종, 10회 결정성 시험 (PRD D28, 2026-11-02). Detector 4종 전부 재생됨(R-10)
 - [x] **권고 액션 R-18** — `none` / `slow_down` / `stop`, 설정 `recommended_action` 절, JSONL `recommended_action` 필드 (PRD D27, 2026-11-02)
-- [ ] 메트릭 파사드 (T7)
+- [x] 메트릭 파사드 (T7) — `telemetry::MetricsExporter`(Supervisor가 배출) + `SummaryRecorder` + `--metrics-json`, 매크로는 clippy로 한 곳만 허용 (2026-11-02)
 - [ ] `rsm-core` 공개 API 문서 정리 + mdBook (나중)
 
 ## 지금 막혀 있는 것
