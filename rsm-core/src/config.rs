@@ -50,6 +50,12 @@ pub struct GroupConfig {
     /// 이 그룹에서 Arbiter로 가는 큐의 용량.
     #[serde(default = "default_queue_capacity")]
     pub queue_capacity: usize,
+    /// Linux `SCHED_FIFO` 실시간 우선순위(1~99). 없으면 OS 기본 스케줄링이다.
+    ///
+    /// 권한(root, `CAP_SYS_NICE`, rtprio 한도)이 필요하다. 적용하지 못하면 기동
+    /// 실패다. Linux 가 아니면 설정 자체가 기동 실패다 (TECH_STACK T5).
+    #[serde(default)]
+    pub rt_priority: Option<u8>,
 }
 
 const fn default_queue_capacity() -> usize {
@@ -175,6 +181,8 @@ pub struct GroupPlan {
     pub period: Duration,
     /// 큐 용량.
     pub queue_capacity: usize,
+    /// `SCHED_FIFO` 우선순위. `None` 이면 OS 기본.
+    pub rt_priority: Option<u8>,
     /// 이 그룹의 Source들. tick 마다 먼저 실행된다.
     pub sources: Vec<(ModuleId, Box<dyn Source>)>,
     /// 이 그룹의 Detector들. 설정에 적힌 순서대로 실행된다.
@@ -186,6 +194,7 @@ impl std::fmt::Debug for GroupPlan {
         f.debug_struct("GroupPlan")
             .field("name", &self.name)
             .field("period", &self.period)
+            .field("rt_priority", &self.rt_priority)
             .field("sources", &self.sources.len())
             .field("detectors", &self.detectors.len())
             .finish_non_exhaustive()
@@ -213,6 +222,7 @@ pub struct BuiltPipeline {
     pub sink: SinkConfig,
 }
 
+/// 0 Hz 는 검증에서 막는다(`build`·`check_header`). 0 갈래는 나눗셈을 피하려는 방어선이다.
 const fn hz_to_period(hz: u32) -> Duration {
     if hz == 0 {
         Duration::from_millis(100)
@@ -270,10 +280,23 @@ impl PipelineConfig {
                     "group `{gname}` has no modules assigned"
                 )));
             }
+            if gcfg.period_hz == 0 {
+                return Err(ConfigError::Invalid(format!(
+                    "group `{gname}`: period_hz must be greater than 0"
+                )));
+            }
+            if let Some(p) = gcfg.rt_priority
+                && !(1..=99).contains(&p)
+            {
+                return Err(ConfigError::Invalid(format!(
+                    "group `{gname}`: rt_priority must be within 1..=99, got {p}"
+                )));
+            }
             groups.push(GroupPlan {
                 name: gname.clone(),
                 period: hz_to_period(gcfg.period_hz),
                 queue_capacity: gcfg.queue_capacity.max(1),
+                rt_priority: gcfg.rt_priority,
                 sources,
                 detectors,
             });
@@ -306,6 +329,11 @@ impl PipelineConfig {
         }
         if self.modules.is_empty() {
             return Err(ConfigError::Invalid("no modules defined".to_owned()));
+        }
+        if self.arbiter.period_hz == 0 || self.supervisor.period_hz == 0 {
+            return Err(ConfigError::Invalid(
+                "arbiter and supervisor period_hz must be greater than 0".to_owned(),
+            ));
         }
         Ok(())
     }

@@ -85,6 +85,18 @@ pub enum ConfigError {
     #[error("invalid configuration: {0}")]
     Invalid(String),
 
+    /// 스레드를 띄우지 못했거나, 설정한 실시간 우선순위를 적용하지 못했다.
+    ///
+    /// 우선순위를 못 얻은 채로 도는 대신 멈춘다. 설정은 "이 주기를 지켜야 한다"고
+    /// 했는데 그 전제가 조용히 빠진 상태가 되기 때문이다.
+    #[error("cannot start thread `{thread}`: {reason}")]
+    Startup {
+        /// 스레드 이름.
+        thread: String,
+        /// 실패 이유.
+        reason: String,
+    },
+
     /// 인터닝 표가 가득 찼다(이름 65,535개 초과).
     #[error("too many names — the interning table is full")]
     TooManyNames,

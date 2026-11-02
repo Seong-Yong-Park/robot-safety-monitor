@@ -19,6 +19,15 @@ use rsm_core::supervisor::HealthRegistry;
 use rsm_core::time::{Clock, Duration, VirtualClock};
 use rsm_core::traits::{ArbiterPolicy, Health};
 
+use std::sync::Arc;
+
+use rsm_core::error::ConfigError;
+use rsm_core::event::SafetyState;
+use rsm_core::intern::Names;
+use rsm_core::schedule;
+use rsm_core::time::MonotonicClock;
+use rsm_core::traits::Sink;
+
 const YAML: &str = r#"
 version: 1
 groups:
@@ -152,4 +161,110 @@ sink: { format: jsonl, path: "-" }
         .build(&registry())
         .expect_err("an unknown module type must be rejected");
     assert!(err.to_string().contains("no_such_module"), "{err}");
+}
+
+// ── 설정 검증: 주기·우선순위 (TECH_STACK T5) ─────────────────────────────────
+
+/// `YAML`의 fast 그룹 줄을 바꿔 끼운 설정.
+fn with_group(group_line: &str) -> String {
+    YAML.replace(
+        "  fast:\n    period_hz: 1000\n    queue_capacity: 64\n",
+        group_line,
+    )
+}
+
+fn build_err(yaml: &str) -> String {
+    PipelineConfig::from_str(yaml)
+        .expect("the YAML itself is well formed")
+        .build(&registry())
+        .expect_err("the config must be rejected")
+        .to_string()
+}
+
+#[test]
+fn rt_priority_outside_1_to_99_is_rejected() {
+    for p in [0, 100] {
+        let yaml = with_group(&format!(
+            "  fast:\n    period_hz: 1000\n    rt_priority: {p}\n"
+        ));
+        let err = build_err(&yaml);
+        assert!(err.contains("rt_priority"), "{err}");
+    }
+}
+
+#[test]
+fn rt_priority_is_carried_into_the_plan() {
+    let yaml = with_group("  fast:\n    period_hz: 1000\n    rt_priority: 80\n");
+    let built = PipelineConfig::from_str(&yaml)
+        .unwrap()
+        .build(&registry())
+        .unwrap();
+    assert_eq!(built.groups[0].rt_priority, Some(80));
+
+    let built = PipelineConfig::from_str(YAML)
+        .unwrap()
+        .build(&registry())
+        .unwrap();
+    assert_eq!(built.groups[0].rt_priority, None, "absent means OS default");
+}
+
+#[test]
+fn zero_hz_is_rejected_instead_of_silently_becoming_10_hz() {
+    let err = build_err(&with_group("  fast:\n    period_hz: 0\n"));
+    assert!(err.contains("period_hz"), "{err}");
+
+    let err = build_err(&YAML.replace("arbiter: { period_hz: 20 }", "arbiter: { period_hz: 0 }"));
+    assert!(err.contains("period_hz"), "{err}");
+}
+
+// ── 실제 스레드로 기동·정지 ───────────────────────────────────────────────────
+
+struct NullSink;
+impl Sink for NullSink {
+    fn publish(&mut self, _state: &SafetyState, _names: &Names) {}
+}
+
+fn start(yaml: &str) -> Result<schedule::Runtime, ConfigError> {
+    let built = PipelineConfig::from_str(yaml)
+        .unwrap()
+        .build(&registry())
+        .unwrap();
+    let clock: Arc<dyn Clock> = Arc::new(MonotonicClock::new());
+    schedule::run(
+        built,
+        &clock,
+        Box::new(MaxSeverity::new()),
+        Box::new(NullSink),
+    )
+}
+
+#[test]
+fn run_starts_ticks_and_stops() {
+    let rt = start(YAML).expect("no rt_priority — nothing can fail here");
+    std::thread::sleep(std::time::Duration::from_millis(30));
+    rt.stop();
+    let ticks = rt.health().group_stats(0).ticks;
+    rt.join();
+    assert!(ticks > 0, "the group thread never ticked");
+}
+
+/// 권한에 따라 결과가 갈린다. root 면 적용되고, 아니면 기동이 **분명하게** 실패해야
+/// 한다. 어느 쪽이든 "우선순위 없이 조용히 도는" 경우는 없다.
+#[test]
+fn rt_priority_either_applies_or_fails_loudly() {
+    let yaml = with_group("  fast:\n    period_hz: 1000\n    rt_priority: 10\n");
+    match start(&yaml) {
+        Ok(rt) => {
+            rt.stop();
+            rt.join();
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            assert!(msg.contains("rsm-group-fast"), "{msg}");
+            assert!(
+                msg.contains("permission denied") || msg.contains("only on Linux"),
+                "{msg}"
+            );
+        }
+    }
 }

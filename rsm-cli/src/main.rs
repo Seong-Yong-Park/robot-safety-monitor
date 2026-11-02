@@ -83,8 +83,11 @@ fn cmd_check(path: &str) -> Result<(), String> {
         built.signal_count
     );
     for g in &built.groups {
+        let sched = g
+            .rt_priority
+            .map_or_else(|| "default".to_owned(), |p| format!("SCHED_FIFO {p}"));
         println!(
-            "    [{}] {:.1} Hz  source {} · detector {}",
+            "    [{}] {:.1} Hz  source {} · detector {} · sched {sched}",
             g.name,
             1e9_f64 / f64::from(u32::try_from(g.period.as_nanos()).unwrap_or(u32::MAX)),
             g.sources.len(),
@@ -102,7 +105,8 @@ fn cmd_run(path: &str, duration_ms: u64) -> Result<(), String> {
     let clock: Arc<dyn rsm_core::time::Clock> = Arc::new(MonotonicClock::new());
     let group_names: Vec<String> = built.groups.iter().map(|g| g.name.clone()).collect();
 
-    let rt = schedule::run(built, &clock, Box::new(MaxSeverity::new()), Box::new(sink));
+    let rt = schedule::run(built, &clock, Box::new(MaxSeverity::new()), Box::new(sink))
+        .map_err(|e| e.to_string())?;
     std::thread::sleep(std::time::Duration::from_millis(duration_ms));
     rt.stop();
 

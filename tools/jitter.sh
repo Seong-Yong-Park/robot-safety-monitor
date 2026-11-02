@@ -2,10 +2,12 @@
 # 지터 측정 하네스 — 부하 없이 / CPU 부하를 걸고 `rsm run`을 여러 번 돌려
 # 그룹 하나의 시작 지연(late) 분포를 표로 낸다. PRD §7 "지터 P99 ≤ 주기의 10%" 판정용.
 #
-#   tools/jitter.sh [-c CONFIG] [-g GROUP] [-n RUNS] [-d MILLIS] [-l LOAD_PROCS]
+#   tools/jitter.sh [-c CONFIG] [-g GROUP] [-n RUNS] [-d MILLIS] [-l LOAD_PROCS] [-p RT_PRIO]
 #
 # 기본: demo-a, fast 그룹, 각 3회, 5초, 부하 프로세스 = CPU 코어 수.
 # 부하는 바쁜 루프 셸 프로세스다. stress-ng 같은 도구를 따로 설치하지 않는다.
+# -p 를 주면 그 그룹에 `rt_priority`(SCHED_FIFO)를 넣은 임시 설정으로 돌린다.
+# 권한(root 또는 CAP_SYS_NICE)이 없으면 rsm 이 기동을 거부한다.
 #
 # Linux 전용. WSL2 에서 잰 값은 참고용이다 — 공식 수치는 전용 Linux + SCHED_FIFO
 # 에서 다시 잰다 (PRD G4, TECH_STACK T1).
@@ -18,34 +20,57 @@ group=fast
 runs=3
 duration=5000
 load=$(nproc)
+prio=
 
-while getopts "c:g:n:d:l:h" opt; do
+while getopts "c:g:n:d:l:p:h" opt; do
   case $opt in
     c) config=$OPTARG ;;
     g) group=$OPTARG ;;
     n) runs=$OPTARG ;;
     d) duration=$OPTARG ;;
     l) load=$OPTARG ;;
-    *) sed -n '2,11p' "$0"; exit 2 ;;
+    p) prio=$OPTARG ;;
+    *) sed -n '2,13p' "$0"; exit 2 ;;
   esac
 done
 
 cargo build --release -q -p rsm-cli
 bin=target/release/rsm
 
-# 설정상의 주기(µs). 판정 기준은 실효 주파수가 아니라 설정한 주기다.
-nominal_hz=$("$bin" check --config "$config" | awk -v g="[$group]" '$1 == g { print $2 }')
-if [[ -z $nominal_hz ]]; then
-  echo "group '$group' not found in $config" >&2
-  exit 1
-fi
-
 hogs=()
+tmp_config=
+config_label=$config
 stop_load() {
   for pid in "${hogs[@]}"; do kill "$pid" 2>/dev/null || true; done
   hogs=()
 }
-trap stop_load EXIT
+cleanup() {
+  stop_load
+  if [[ -n $tmp_config ]]; then rm -f "$tmp_config"; fi
+}
+trap cleanup EXIT
+
+# -p: 그룹 머리 줄(`  fast:` — 블록 형식만) 바로 아래에 rt_priority 를 끼운 사본을 쓴다.
+if [[ -n $prio ]]; then
+  if ! grep -Eq "^  $group:[[:space:]]*(#.*)?$" "$config"; then
+    echo "-p needs '  $group:' in block style in $config" >&2
+    exit 1
+  fi
+  tmp_config=$(mktemp --suffix=.yaml)
+  awk -v g="$group" -v p="$prio" '{ print } $0 ~ "^  " g ":[[:space:]]*(#.*)?$" { print "    rt_priority: " p }' \
+    "$config" >"$tmp_config"
+  config_label="$config + rt_priority $prio"
+  config=$tmp_config
+fi
+
+# 설정상의 주기(Hz). 판정 기준은 실효 주파수가 아니라 설정한 주기다.
+check_line=$("$bin" check --config "$config" | awk -v g="[$group]" '$1 == g')
+nominal_hz=$(echo "$check_line" | awk '{ print $2 }')
+sched=$(echo "$check_line" | sed -n 's/.*sched //p')
+if [[ -z $nominal_hz ]]; then
+  echo "group '$group' not found in $config" >&2
+  exit 1
+fi
 
 start_load() {
   for _ in $(seq "$load"); do
@@ -54,7 +79,7 @@ start_load() {
   done
 }
 
-echo "config $config · group $group (${nominal_hz} Hz) · ${runs} runs × ${duration} ms · load procs $load · $(nproc) CPUs"
+echo "config $config_label · group $group (${nominal_hz} Hz, sched $sched) · ${runs} runs × ${duration} ms · load procs $load · $(nproc) CPUs"
 echo
 echo "| load | run | Hz | miss / tick | late p50 | p99 | p99.9 | max | mean | p99 / period |"
 echo "|---|---|---|---|---|---|---|---|---|---|"
@@ -62,10 +87,11 @@ echo "|---|---|---|---|---|---|---|---|---|---|"
 for mode in none cpu; do
   if [[ $mode == cpu ]]; then start_load; fi
   for r in $(seq "$runs"); do
-    line=$("$bin" run --config "$config" --duration-ms "$duration" 2>&1 >/dev/null |
-      grep "^\[rsm\] $group tick" || true)
+    out=$("$bin" run --config "$config" --duration-ms "$duration" 2>&1 >/dev/null || true)
+    line=$(echo "$out" | grep "^\[rsm\] $group tick" || true)
     if [[ -z $line ]]; then
-      echo "no summary line for group '$group'" >&2
+      echo "no summary line for group '$group':" >&2
+      echo "$out" >&2
       exit 1
     fi
     # [rsm] fast tick 1001 · 999.8 Hz · miss 0 · late p50 A p99 B p99.9 C max D mean E µs · ...

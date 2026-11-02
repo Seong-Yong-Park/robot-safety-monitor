@@ -29,11 +29,13 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
 use crate::config::{BuiltPipeline, GroupPlan};
+use crate::error::ConfigError;
 use crate::event::{HazardEvent, MonitorAvailability, Severity};
 use crate::intern::Names;
 use crate::signal::SignalBus;
@@ -130,6 +132,11 @@ impl GroupWorker {
     /// 실행 주기.
     pub fn period(&self) -> Duration {
         self.plan.period
+    }
+
+    /// 설정한 `SCHED_FIFO` 우선순위.
+    pub fn rt_priority(&self) -> Option<u8> {
+        self.plan.rt_priority
     }
 
     /// 이 그룹의 버스(검사용).
@@ -308,12 +315,17 @@ fn sleep_until(clock: &dyn Clock, deadline: Instant) {
 ///
 /// 그룹마다 스레드 하나, Arbiter 하나, Supervisor 하나를 띄우고 즉시 반환한다.
 /// 멈추려면 [`Runtime::stop`] 뒤에 [`Runtime::join`]을 부른다.
+///
+/// # Errors
+///
+/// 스레드를 못 띄웠거나 그룹의 `rt_priority`를 적용하지 못하면, 이미 띄운 스레드를
+/// 거두고 [`ConfigError::Startup`]을 돌려준다. 일부만 도는 파이프라인은 만들지 않는다.
 pub fn run(
     pipeline: BuiltPipeline,
     clock: &Arc<dyn Clock>,
     policy: Box<dyn ArbiterPolicy>,
     sink: Box<dyn Sink>,
-) -> Runtime {
+) -> Result<Runtime, ConfigError> {
     let BuiltPipeline {
         groups,
         names,
@@ -332,75 +344,164 @@ pub fn run(
     let mut consumers = Vec::with_capacity(groups.len());
 
     for (index, plan) in groups.into_iter().enumerate() {
-        let capacity = plan.queue_capacity;
-        let (tx, rx) = RingBuffer::<HazardEvent>::new(capacity);
+        let (tx, rx) = RingBuffer::<HazardEvent>::new(plan.queue_capacity);
         consumers.push(rx);
-
         let worker = GroupWorker::new(plan, signal_count, index);
         let out = QueueSink::new(tx, index, Arc::clone(&health));
-        let clock = Arc::clone(clock);
-        let health = Arc::clone(&health);
-        let stop = Arc::clone(&stop);
-        let name = format!("rsm-group-{}", worker.name());
-
-        let h = thread::Builder::new()
-            .name(name)
-            .spawn(move || group_loop(worker, index, &*clock, &health, out, &stop));
-        if let Ok(h) = h {
-            handles.push(h);
-        }
-    }
-
-    {
-        let mut arbiter = ArbiterWorker::new(
-            policy,
-            consumers,
-            sink,
-            Arc::clone(&names),
-            sink_cfg.on_change_only,
+        let spawned = spawn_group(
+            worker,
+            index,
+            Arc::clone(clock),
+            Arc::clone(&health),
+            out,
+            Arc::clone(&stop),
         );
-        let clock = Arc::clone(clock);
-        let health = Arc::clone(&health);
-        let stop = Arc::clone(&stop);
-        let h = thread::Builder::new()
-            .name("rsm-arbiter".to_owned())
-            .spawn(move || {
-                let mut release = clock.now();
-                while !stop.load(Ordering::Relaxed) {
-                    arbiter.tick(clock.now(), health.availability());
-                    release = next_release(release, clock.now(), arbiter_period);
-                    sleep_until(&*clock, release);
-                }
-            });
-        if let Ok(h) = h {
-            handles.push(h);
-        }
+        keep_or_abort(&mut handles, &stop, spawned)?;
     }
 
-    {
-        let clock = Arc::clone(clock);
-        let health = Arc::clone(&health);
-        let stop = Arc::clone(&stop);
-        let h = thread::Builder::new()
-            .name("rsm-supervisor".to_owned())
-            .spawn(move || {
-                let mut release = clock.now();
-                while !stop.load(Ordering::Relaxed) {
-                    health.scan(clock.now(), group_stale_after);
-                    release = next_release(release, clock.now(), supervisor_period);
-                    sleep_until(&*clock, release);
-                }
-            });
-        if let Ok(h) = h {
-            handles.push(h);
+    let mut arbiter = ArbiterWorker::new(
+        policy,
+        consumers,
+        sink,
+        Arc::clone(&names),
+        sink_cfg.on_change_only,
+    );
+    let (clock_a, health_a, stop_a) = (Arc::clone(clock), Arc::clone(&health), Arc::clone(&stop));
+    let spawned = spawn_named("rsm-arbiter", move || {
+        let mut release = clock_a.now();
+        while !stop_a.load(Ordering::Relaxed) {
+            arbiter.tick(clock_a.now(), health_a.availability());
+            release = next_release(release, clock_a.now(), arbiter_period);
+            sleep_until(&*clock_a, release);
         }
-    }
+    });
+    keep_or_abort(&mut handles, &stop, spawned)?;
 
-    Runtime {
+    let (clock_s, health_s, stop_s) = (Arc::clone(clock), Arc::clone(&health), Arc::clone(&stop));
+    let spawned = spawn_named("rsm-supervisor", move || {
+        let mut release = clock_s.now();
+        while !stop_s.load(Ordering::Relaxed) {
+            health_s.scan(clock_s.now(), group_stale_after);
+            release = next_release(release, clock_s.now(), supervisor_period);
+            sleep_until(&*clock_s, release);
+        }
+    });
+    keep_or_abort(&mut handles, &stop, spawned)?;
+
+    Ok(Runtime {
         stop,
         handles,
         health,
+    })
+}
+
+/// 그룹 스레드를 띄운다. 스레드가 `rt_priority`를 자기 자신에게 건 결과를 받은 뒤에 돌아온다.
+///
+/// 스케줄링 정책은 스레드가 스스로 바꾸는 것이 가장 단순하다. 실패하면 그 스레드는
+/// 루프에 들어가지 않고 끝나며, 여기서 거둔다.
+fn spawn_group(
+    worker: GroupWorker,
+    index: usize,
+    clock: Arc<dyn Clock>,
+    health: Arc<HealthRegistry>,
+    out: QueueSink,
+    stop: Arc<AtomicBool>,
+) -> Result<JoinHandle<()>, ConfigError> {
+    let name = format!("rsm-group-{}", worker.name());
+    let rt_priority = worker.rt_priority();
+    let (ready_tx, ready_rx) = mpsc::sync_channel::<Result<(), String>>(1);
+
+    let h = spawn_named(&name, move || {
+        let applied = rt_priority.map_or(Ok(()), set_realtime_priority);
+        let ok = applied.is_ok();
+        drop(ready_tx.send(applied));
+        if ok {
+            group_loop(worker, index, &*clock, &health, out, &stop);
+        }
+    })?;
+    let ready = ready_rx
+        .recv()
+        .unwrap_or_else(|_| Err("the thread exited before starting".to_owned()));
+    match ready {
+        Ok(()) => Ok(h),
+        Err(reason) => {
+            drop(h.join());
+            Err(ConfigError::Startup {
+                thread: name,
+                reason,
+            })
+        }
     }
+}
+
+/// 이름 붙은 스레드를 띄운다. 실패를 [`ConfigError::Startup`]으로 바꾼다.
+fn spawn_named(
+    name: &str,
+    f: impl FnOnce() + Send + 'static,
+) -> Result<JoinHandle<()>, ConfigError> {
+    thread::Builder::new()
+        .name(name.to_owned())
+        .spawn(f)
+        .map_err(|e| ConfigError::Startup {
+            thread: name.to_owned(),
+            reason: e.to_string(),
+        })
+}
+
+/// 띄운 스레드를 모은다. 하나라도 실패하면 이미 띄운 것을 멈추고 거둔 뒤 오류를 넘긴다.
+fn keep_or_abort(
+    handles: &mut Vec<JoinHandle<()>>,
+    stop: &AtomicBool,
+    spawned: Result<JoinHandle<()>, ConfigError>,
+) -> Result<(), ConfigError> {
+    match spawned {
+        Ok(h) => {
+            handles.push(h);
+            Ok(())
+        }
+        Err(e) => {
+            stop.store(true, Ordering::Relaxed);
+            for h in handles.drain(..) {
+                drop(h.join());
+            }
+            Err(e)
+        }
+    }
+}
+
+/// 이 스레드를 `SCHED_FIFO` 우선순위 `level`(1~99)로 바꾼다 (TECH_STACK T5).
+///
+/// 같은 우선순위의 일반 프로세스와 CPU를 나눠 쓰면 스케줄러 시간 조각(수 ms)만큼
+/// 깨어남이 밀린다. 실시간 정책 스레드는 일반 스레드보다 항상 먼저 돈다. 펌웨어로
+/// 치면 감시 루프를 가장 높은 인터럽트 우선순위에 두는 것이다.
+#[cfg(target_os = "linux")]
+fn set_realtime_priority(level: u8) -> Result<(), String> {
+    use thread_priority::{
+        RealtimeThreadSchedulePolicy, ThreadPriority, ThreadPriorityValue, ThreadSchedulePolicy,
+        set_thread_priority_and_policy, thread_native_id,
+    };
+
+    let value = ThreadPriorityValue::try_from(level)?;
+    set_thread_priority_and_policy(
+        thread_native_id(),
+        ThreadPriority::Crossplatform(value),
+        ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
+    )
+    .map_err(|e| match e {
+        // EPERM. root 가 아니면 CAP_SYS_NICE 나 rtprio 한도(ulimit -r)가 있어야 한다.
+        thread_priority::Error::OS(1) => format!(
+            "SCHED_FIFO {level}: permission denied (needs root, CAP_SYS_NICE, or an rtprio limit)"
+        ),
+        other => format!("SCHED_FIFO {level}: {other}"),
+    })
+}
+
+/// Linux 가 아니면 실시간 우선순위를 지원하지 않는다. 설정했으면 기동 실패다.
+#[cfg(not(target_os = "linux"))]
+fn set_realtime_priority(level: u8) -> Result<(), String> {
+    Err(format!(
+        "rt_priority {level}: real-time priority is supported only on Linux"
+    ))
 }
 
 fn group_loop(
@@ -516,6 +617,7 @@ mod tests {
             name: "fast".to_owned(),
             period: Duration::from_millis(1),
             queue_capacity: 16,
+            rt_priority: None,
             sources,
             detectors: dets,
         }

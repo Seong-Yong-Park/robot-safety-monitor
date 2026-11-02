@@ -48,6 +48,7 @@ serde_json = "1"                                  # JSONL 출력 (rsm-cli)
 serde_yaml_ng = "0.10"                            # YAML 설정 파싱 (TECH_STACK T3)
 rtrb = "0.3"                                      # wait-free SPSC 링버퍼 (TECH_STACK T5)
 thiserror = "2"                                   # 에러 타입 derive (라이브러리용)
+thread-priority = "3"                             # 그룹 스레드 SCHED_FIFO (TECH_STACK T5). Linux 에서만 쓴다
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  코딩 규칙 (TECH_STACK T10 / PRD D18)
