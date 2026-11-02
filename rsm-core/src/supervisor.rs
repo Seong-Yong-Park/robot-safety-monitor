@@ -20,6 +20,7 @@
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 
 use crate::event::{ModuleId, MonitorAvailability};
+use crate::histogram::LatencyHistogram;
 use crate::time::{Duration, Instant};
 use crate::traits::Health;
 
@@ -77,6 +78,8 @@ struct GroupSlot {
     sum_work_ns: AtomicU64,
     max_late_ns: AtomicU64,
     sum_late_ns: AtomicU64,
+    /// 시작 지연 분포. 백분위(P50/P99/P99.9)를 할당 없이 구한다.
+    late_hist: LatencyHistogram,
 }
 
 /// 그룹 하나의 통계 스냅샷. 종료 시 요약 출력에 쓴다.
@@ -89,6 +92,10 @@ struct GroupSlot {
 /// | 작업 시간 (work) | `ended − started` — 모듈들이 실제로 쓴 시간 |
 /// | 시작 지연 (late) | `started − release` — 예정 시각보다 늦게 깬 정도 (지터) |
 /// | 데드라인 미스 (miss) | `ended > release + period` — 다음 예정 시각까지 못 끝냄 |
+///
+/// 시작 지연의 백분위(`p50`·`p99`·`p999`)는 고정 칸 히스토그램에서 구한다. 값은
+/// 그 순위가 들어간 칸의 상한이라 실제보다 작지 않고, 넘치는 정도는 6.25% 이내다.
+/// 관측한 최대보다 커지지는 않게 잘라 둔다.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GroupStats {
     /// 지금까지 실행한 tick 수.
@@ -105,6 +112,12 @@ pub struct GroupStats {
     pub max_late_ns: u64,
     /// 평균 시작 지연(ns).
     pub mean_late_ns: u64,
+    /// 시작 지연 P50(ns). 지터의 중앙값.
+    pub p50_late_ns: u64,
+    /// 시작 지연 P99(ns). PRD §7 지터 목표가 보는 값.
+    pub p99_late_ns: u64,
+    /// 시작 지연 P99.9(ns).
+    pub p999_late_ns: u64,
     /// 첫 tick 과 마지막 tick 의 시작 시각 차(ns). 실효 주파수 계산에 쓴다.
     pub span_ns: u64,
 }
@@ -209,6 +222,7 @@ impl HealthRegistry {
         g.max_work_ns.fetch_max(work, Ordering::Relaxed);
         g.sum_late_ns.fetch_add(late, Ordering::Relaxed);
         g.max_late_ns.fetch_max(late, Ordering::Relaxed);
+        g.late_hist.record(late);
         if ended > release + period {
             g.misses.fetch_add(1, Ordering::Relaxed);
         }
@@ -232,6 +246,11 @@ impl HealthRegistry {
         let ticks = g.ticks.load(Ordering::Relaxed);
         let first = Instant::from_nanos(g.first_tick_ns.load(Ordering::Relaxed));
         let last = Instant::from_nanos(g.last_tick_ns.load(Ordering::Acquire));
+        let max_late_ns = g.max_late_ns.load(Ordering::Relaxed);
+        let [p50, p99, p999] = g
+            .late_hist
+            .quantiles([500_000, 990_000, 999_000])
+            .map(|v| v.min(max_late_ns));
         GroupStats {
             ticks,
             misses: g.misses.load(Ordering::Relaxed),
@@ -242,12 +261,15 @@ impl HealthRegistry {
                 .load(Ordering::Relaxed)
                 .checked_div(ticks)
                 .unwrap_or(0),
-            max_late_ns: g.max_late_ns.load(Ordering::Relaxed),
+            max_late_ns,
             mean_late_ns: g
                 .sum_late_ns
                 .load(Ordering::Relaxed)
                 .checked_div(ticks)
                 .unwrap_or(0),
+            p50_late_ns: p50,
+            p99_late_ns: p99,
+            p999_late_ns: p999,
             span_ns: (last - first).as_nanos(),
         }
     }
@@ -421,6 +443,33 @@ mod tests {
         assert_eq!(s.mean_work_ns, 20_000);
         assert_eq!(s.max_late_ns, 60_000);
         assert_eq!(s.mean_late_ns, 30_000);
+    }
+
+    #[test]
+    fn late_percentiles_come_from_the_distribution_not_the_mean() {
+        // 99 tick 은 10 µs, 1 tick 은 800 µs 늦었다. 평균(17.9 µs)은 꼬리를 숨긴다.
+        let h = HealthRegistry::new(0, 1);
+        for k in 0..100 {
+            let late = if k < 99 { 10 } else { 800 };
+            tick_us(&h, k * 1_000, k * 1_000 + late, 5);
+        }
+        let s = h.group_stats(0);
+        assert_eq!(s.mean_late_ns, 17_900);
+        assert!((10_000..=10_000 + 10_000 / 16).contains(&s.p50_late_ns));
+        assert!((10_000..=10_000 + 10_000 / 16).contains(&s.p99_late_ns));
+        // P99 순위는 99 번째(10 µs), P99.9 순위는 ceil(99.9) = 100 번째(800 µs)
+        assert_eq!(
+            s.p999_late_ns, 800_000,
+            "the max clamps the bucket's upper bound"
+        );
+    }
+
+    #[test]
+    fn a_single_tick_reports_its_own_lateness() {
+        let h = HealthRegistry::new(0, 1);
+        tick_us(&h, 0, 37, 5);
+        let s = h.group_stats(0);
+        assert_eq!((s.p50_late_ns, s.p99_late_ns), (37_000, 37_000));
     }
 
     #[test]

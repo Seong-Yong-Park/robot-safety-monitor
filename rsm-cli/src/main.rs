@@ -100,24 +100,33 @@ fn cmd_run(path: &str, duration_ms: u64) -> Result<(), String> {
 
     let sink = JsonlSink::open(&built.sink.path).map_err(|e| e.to_string())?;
     let clock: Arc<dyn rsm_core::time::Clock> = Arc::new(MonotonicClock::new());
+    let group_names: Vec<String> = built.groups.iter().map(|g| g.name.clone()).collect();
 
     let rt = schedule::run(built, &clock, Box::new(MaxSeverity::new()), Box::new(sink));
     std::thread::sleep(std::time::Duration::from_millis(duration_ms));
     rt.stop();
 
-    let stats = rt.health().group_stats(0);
+    let stats: Vec<_> = (0..group_names.len())
+        .map(|i| rt.health().group_stats(i))
+        .collect();
     rt.join();
-    eprintln!(
-        "[rsm] group0 tick {} · {} Hz · miss {} · late max {} µs mean {} µs · work max {} µs mean {} µs · overflow {}",
-        stats.ticks,
-        one_decimal(stats.effective_millihertz()),
-        stats.misses,
-        one_decimal(stats.max_late_ns),
-        one_decimal(stats.mean_late_ns),
-        one_decimal(stats.max_work_ns),
-        one_decimal(stats.mean_work_ns),
-        stats.overflows,
-    );
+    // 한 그룹당 한 줄. tools/jitter.sh 가 이 형식을 파싱한다.
+    for (name, s) in group_names.iter().zip(&stats) {
+        eprintln!(
+            "[rsm] {name} tick {} · {} Hz · miss {} · late p50 {} p99 {} p99.9 {} max {} mean {} µs · work max {} mean {} µs · overflow {}",
+            s.ticks,
+            one_decimal(s.effective_millihertz()),
+            s.misses,
+            one_decimal(s.p50_late_ns),
+            one_decimal(s.p99_late_ns),
+            one_decimal(s.p999_late_ns),
+            one_decimal(s.max_late_ns),
+            one_decimal(s.mean_late_ns),
+            one_decimal(s.max_work_ns),
+            one_decimal(s.mean_work_ns),
+            s.overflows,
+        );
+    }
     Ok(())
 }
 

@@ -40,6 +40,7 @@ pub mod arbiter;
 pub mod config;
 pub mod error;
 pub mod event;
+mod histogram;
 pub mod intern;
 pub mod registry;
 pub mod schedule;
