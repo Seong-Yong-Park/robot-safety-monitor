@@ -54,6 +54,8 @@ rsm-cli  ──▶  rsm-modules  ──▶  rsm-core
   `rsm-alloc-check`의 `GlobalAlloc` 구현 하나뿐이다.
 - tick 경로를 바꾸면 `cargo test -p rsm-alloc-check`가 할당 0을 확인한다. 실패 메시지에
   몇 번째 tick에서 몇 번 할당했는지 나온다.
+- 지터(시작 지연 P50/P99)는 `tools/jitter.sh`로 잰다(Linux 전용, 부하 없음 / CPU 부하 각 3회).
+  WSL2 수치는 참고용이다.
 - 라이브러리 크레이트에서 `unwrap()` / `expect()` / `panic!()` 금지.
   실패는 `Result`로 돌려주고 판단은 호출자가 한다.
   테스트 모듈에서만 `#[allow(..., reason = "...")]`로 완화한다.

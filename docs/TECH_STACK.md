@@ -129,6 +129,8 @@
 
 **결정.** **세 출력 분리.** (a) 이벤트 Sink = `serde_json` 직접(스키마 고정, 별도 스레드). (b) 진단 로그 = `tracing` + `tracing-subscriber`(텍스트/JSON 선택, `tracing-log` 브리지), 핫패스 밖에서만 호출. (c) 계측 = 핫패스는 그룹별 고정 슬롯(원자 카운터 + 고정 링버퍼, 할당·락 없음), 배출 스레드가 `metrics` 파사드로 이관; exporter는 v1 종료 시 요약 JSON 덤프, P1(R-14)에서 Prometheus. 1 kHz tick 루프 안에서 `tracing`/`metrics` 매크로 호출 금지(clippy `disallowed_macros`로 핫패스 모듈에 적용).
 
+**고정 슬롯의 지연 분포 (2026-11-02).** 지터 P99(PRD §7)를 내려면 평균·최대로는 부족하다. 그룹 슬롯에 **고정 칸 지연 히스토그램**(`rsm-core/src/histogram.rs`)을 둔다 — 원자 카운터 322칸, 1 µs 미만 한 칸 + 2배 구간마다 16칸(로그-선형, 상대 오차 ≤ 6.25%) + 약 1 s 이상 한 칸, 그룹당 약 2.6 KB를 초기화 때 잡는다. tick마다 원자 덧셈 한 번이라 할당·락이 없다(`rsm-alloc-check`가 확인). 백분위는 해당 칸의 **상한**으로 보고해 실제보다 작게 나오지 않게 하고, 관측 최대로 자른다. 원시 표본 링버퍼는 표본 자체가 필요해질 때(리플레이·`metrics` 배출) 추가한다. HDR Histogram 크레이트를 쓰지 않은 이유: 칸 배치가 고정이면 이 정도는 100줄이고, 외부 크레이트의 내부 할당 여부를 따로 검증할 필요가 없다.
+
 ---
 
 ## T8. 에러 처리 · 패닉 격리
@@ -353,7 +355,7 @@ robot-safety-monitor/
 | T4 | 레지스트리 | **명시적 등록 함수**, 팩토리 `fn(&Params) -> Result<Box<dyn Detector>>` 고정 |
 | T5 | 스레드·큐 | **`std::thread` + `thread-priority` + `rtrb`**(전 구간 SPSC 정규화), tokio 미사용. 놓친 주기는 건너뛰고 위상 유지 |
 | T6 | 시간 | **자체 `Instant(u64 ns)` + `trait Clock`**, `MonotonicClock`·`VirtualClock`(v1), `RosClock`(Phase 3) |
-| T7 | 로깅·계측 | **3분리** — Sink `serde_json` / 진단 `tracing` / 계측 핫패스 고정 슬롯 → `metrics` |
+| T7 | 로깅·계측 | **3분리** — Sink `serde_json` / 진단 `tracing` / 계측 핫패스 고정 슬롯(원자 카운터 + 고정 칸 지연 히스토그램) → `metrics` |
 | T8 | 에러·패닉 | **`thiserror` + `anyhow` + unwind + 모듈 tick `catch_unwind` + 패닉 모듈 영구 `Faulted`** (재시작 정책은 P1 R-25) |
 | T9 | 테스트 | **전체 채택** `proptest`·`insta`·`loom`·Miri·`criterion`·`llvm-cov`·할당 카운터, 도입은 단계별. 할당 카운터는 시험 전용 크레이트 `rsm-alloc-check` |
 | T10 | 코딩 규칙 | core `forbid(unsafe_code)`, **`pedantic` 켬**, `indexing_slicing`은 핫패스 한정, `cargo-deny` 단일화 |

@@ -177,10 +177,15 @@ for detector in detectors: detector.tick(now, &bus, out)
 | 지표 | 정의 | 무엇을 보나 |
 |---|---|---|
 | 데드라인 미스 | `ended > release + period` | 다음 예정 시각까지 못 끝냄 |
-| 시작 지연 | `started − release` | OS가 얼마나 늦게 깨웠나 (지터) |
+| 시작 지연 | `started − release` | OS가 얼마나 늦게 깨웠나 (지터). 최대·평균에 더해 P50·P99·P99.9 |
 | 작업 시간 | `ended − started` | 모듈들이 실제로 쓴 시간 |
 
 작업 시간만 보면 주기를 절반밖에 못 지켜도 문제가 안 보인다(Phase 0의 실수).
+
+시작 지연의 백분위는 `histogram.rs`의 고정 칸 히스토그램에서 나온다. 값을 저장하지
+않고 "몇 번 칸에 들어갔나"만 원자 덧셈으로 센다. 펌웨어에서 ISR 지연을 재려고
+`uint32_t hist[N]`을 두는 것과 같다. 칸 너비가 값의 1/16 이하라 오차는 6.25% 이내이고,
+칸 상한으로 보고하므로 실제보다 작게 나오지 않는다.
 
 `QueueSink`도 본다. **큐가 가득 차면 이벤트를 버린다.** 여기서 블로킹하면
 1 kHz 그룹이 Arbiter 속도에 묶인다. 대신 오버플로를 기록하고 Supervisor가
@@ -189,7 +194,8 @@ for detector in detectors: detector.tick(now, &bus, out)
 > **증상 → 여기**: 주기가 안 맞는다 / 지터가 크다 / 이벤트가 새는 것 같다 →
 > `schedule.rs`. `rsm run`이 끝날 때 stderr에 찍는 요약(`tick · Hz · miss ·
 > late · work · overflow`)이 첫 단서다. 설정 주파수와 `Hz`가 다르면 스케줄러,
-> `late`가 크면 OS, `work`가 크면 모듈을 의심한다.
+> `late`가 크면 OS, `work`가 크면 모듈을 의심한다. 분포를 여러 번, 부하를 걸고
+> 보려면 `tools/jitter.sh`.
 
 ---
 
