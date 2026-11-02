@@ -1,0 +1,8 @@
+---
+source: rsm-modules/tests/replay.rs
+expression: "replay(cfg, 1_000)"
+---
+{"active":[],"availability":"Available","level":"NONE","recommended_action":"none","ts_ns":0}
+{"active":[],"availability":"Degraded","level":"NONE","recommended_action":"none","ts_ns":300000000}
+{"active":[{"category":"internal","confidence":1.0,"evidence":{"limit":100.0,"measured":110.0},"kind":"internal.joint.torque_limit","observed_at_ns":500000000,"severity":"CRITICAL","source":"torque_limit","ttl_ms":50}],"availability":"Degraded","level":"CRITICAL","recommended_action":"stop","ts_ns":500000000}
+{"active":[],"availability":"Degraded","level":"NONE","recommended_action":"none","ts_ns":650000000}

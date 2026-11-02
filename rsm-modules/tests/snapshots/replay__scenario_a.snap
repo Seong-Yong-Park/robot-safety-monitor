@@ -1,0 +1,11 @@
+---
+source: rsm-modules/tests/replay.rs
+expression: "replay(scenario_a(), 1_500)"
+---
+{"active":[],"availability":"Available","level":"NONE","recommended_action":"none","ts_ns":0}
+{"active":[{"category":"internal","confidence":1.0,"evidence":{"limit":100.0,"measured":110.0},"kind":"internal.joint.torque_limit","observed_at_ns":500000000,"severity":"CRITICAL","source":"torque_limit","ttl_ms":50}],"availability":"Available","level":"CRITICAL","recommended_action":"stop","ts_ns":500000000}
+{"active":[{"category":"internal","confidence":1.0,"evidence":{"limit":100.0,"measured":110.0},"kind":"internal.joint.torque_limit","observed_at_ns":590000000,"severity":"CRITICAL","source":"torque_limit","ttl_ms":50},{"category":"external","confidence":1.0,"evidence":{"distance_m":0.9,"threshold_m":1.0},"kind":"external.min_distance","observed_at_ns":600000000,"severity":"WARNING","source":"proximity","ttl_ms":50}],"availability":"Available","level":"CRITICAL","recommended_action":"stop","ts_ns":600000000}
+{"active":[{"category":"external","confidence":1.0,"evidence":{"distance_m":0.9,"threshold_m":1.0},"kind":"external.min_distance","observed_at_ns":650000000,"severity":"WARNING","source":"proximity","ttl_ms":50}],"availability":"Available","level":"WARNING","recommended_action":"slow_down","ts_ns":650000000}
+{"active":[{"category":"external","confidence":1.0,"evidence":{"distance_m":0.3,"threshold_m":0.4},"kind":"external.min_distance","observed_at_ns":700000000,"severity":"CRITICAL","source":"proximity","ttl_ms":50}],"availability":"Available","level":"CRITICAL","recommended_action":"stop","ts_ns":700000000}
+{"active":[],"availability":"Available","level":"NONE","recommended_action":"none","ts_ns":850000000}
+{"active":[{"category":"internal","confidence":1.0,"evidence":{"age_ms":150.0,"timeout_ms":100.0},"kind":"internal.comm_timeout","observed_at_ns":950000000,"severity":"CRITICAL","source":"wheel_link","ttl_ms":50}],"availability":"Available","level":"CRITICAL","recommended_action":"stop","ts_ns":950000000}

@@ -48,6 +48,7 @@ pub struct ModuleCtx<'a> {
     name: String,
     params: &'a Params,
     names: &'a mut Names,
+    base_dir: Option<&'a std::path::Path>,
 }
 
 impl<'a> ModuleCtx<'a> {
@@ -58,6 +59,27 @@ impl<'a> ModuleCtx<'a> {
             name,
             params,
             names,
+            base_dir: None,
+        }
+    }
+
+    /// 설정 파일이 있는 디렉터리를 알려 준다. [`resolve_path`](Self::resolve_path)의 기준이 된다.
+    #[must_use]
+    pub const fn with_base_dir(mut self, base_dir: Option<&'a std::path::Path>) -> Self {
+        self.base_dir = base_dir;
+        self
+    }
+
+    /// 파라미터로 받은 파일 경로를 푼다. 상대 경로는 **설정 파일이 있는 디렉터리** 기준이다.
+    ///
+    /// 실행한 위치(현재 디렉터리)가 아니라 설정 파일 기준인 이유: 설정과 그 설정이 가리키는
+    /// 파일(리플레이 입력 등)은 함께 옮겨 다닌다. 설정을 문자열에서 읽어 기준이 없으면
+    /// 현재 디렉터리 기준이다.
+    pub fn resolve_path(&self, path: &str) -> std::path::PathBuf {
+        let p = std::path::Path::new(path);
+        match self.base_dir {
+            Some(base) if p.is_relative() => base.join(p),
+            _ => p.to_path_buf(),
         }
     }
 

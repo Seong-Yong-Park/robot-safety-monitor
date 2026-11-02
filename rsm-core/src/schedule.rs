@@ -1,4 +1,4 @@
-//! 주기 실행 — 그룹 스레드·Arbiter 스레드·Supervisor 스레드 (R-03, R-16, R-18).
+//! 주기 실행 — 그룹 스레드·Arbiter 스레드·Supervisor 스레드 (R-06, R-07, R-08).
 //!
 //! # 구조
 //!
@@ -22,7 +22,7 @@
 //!
 //! # 패닉 격리
 //!
-//! 모듈 하나가 패닉해도 감시기 전체가 죽으면 안 된다(R-18). 각 모듈 호출은
+//! 모듈 하나가 패닉해도 감시기 전체가 죽으면 안 된다(R-07). 각 모듈 호출은
 //! [`catch_unwind`]로 감싸고, 패닉한 모듈은 `Faulted`로 표시한 뒤 이후 tick에서
 //! 건너뛴다. 감시 범위가 줄었다는 사실은 Supervisor가 `Degraded`로 알린다.
 
@@ -247,7 +247,7 @@ impl ArbiterWorker {
 
         // `on_change_only`가 false면 매 주기 내보낸다. 이것이 곧 하트비트다 —
         // 소비자는 "조용함"을 안전으로 읽으면 안 되고, 하트비트가 끊긴 것으로
-        // 감시기 자체의 이상을 알아챈다(R-16).
+        // 감시기 자체의 이상을 알아챈다(R-06, PRD D24).
         if !self.on_change_only || self.last.as_ref() != Some(&key) {
             self.sink.publish(&state, &self.names);
             self.last = Some(key);
@@ -408,6 +408,90 @@ pub fn run(
         handles,
         health,
     })
+}
+
+/// 조립된 파이프라인을 **가상 시각**으로 `until`까지 돌린다 (R-10, PRD D28). 스레드는 없다.
+///
+/// 시각 0 부터 그룹·Supervisor·Arbiter 를 각자의 주기 격자 위에서 차례로 밟는다. 실제
+/// 실행([`run`])과 같은 일꾼·큐·건강 표를 쓰고, 다른 것은 "언제"를 벽시계가 아니라 이
+/// 함수가 정한다는 점뿐이다. 그래서 결과가 **실행 속도와 무관하게 늘 같다** — 1 시간
+/// 분량 기록도 기계가 낼 수 있는 속도로 재생된다.
+///
+/// - 같은 시각에 겹치면 **그룹(설정 순) → Supervisor → Arbiter** 순서다. 실제 실행에서는
+///   스레드마다 따로라 순서가 없지만, 재생은 순서를 고정해야 결과가 같다.
+/// - 그룹의 `rt_priority`는 쓰지 않는다(스레드가 없다). 작업 시간은 0 으로 기록되므로
+///   지터·미스 통계에는 뜻이 없다.
+///
+/// 돌려주는 건강 표로 그룹 tick 수·오버플로 같은 통계를 읽는다.
+pub fn replay(
+    pipeline: BuiltPipeline,
+    policy: Box<dyn ArbiterPolicy>,
+    sink: Box<dyn Sink>,
+    until: Duration,
+) -> Arc<HealthRegistry> {
+    let BuiltPipeline {
+        groups,
+        names,
+        signal_count,
+        module_count,
+        arbiter_period,
+        supervisor_period,
+        group_stale_after,
+        recommended_action,
+        sink: sink_cfg,
+    } = pipeline;
+
+    let health = Arc::new(HealthRegistry::new(module_count, groups.len()));
+    let mut workers = Vec::with_capacity(groups.len());
+    let mut consumers = Vec::with_capacity(groups.len());
+    for (index, plan) in groups.into_iter().enumerate() {
+        let (tx, rx) = RingBuffer::<HazardEvent>::new(plan.queue_capacity);
+        consumers.push(rx);
+        let worker = GroupWorker::new(plan, signal_count, index);
+        let out = QueueSink::new(tx, index, Arc::clone(&health));
+        workers.push((worker, out, Instant::ZERO));
+    }
+    let mut arbiter = ArbiterWorker::new(
+        policy,
+        consumers,
+        sink,
+        Arc::new(names),
+        sink_cfg.on_change_only,
+    )
+    .with_recommended_action(recommended_action);
+
+    // 주기가 0 이면 시각이 앞으로 가지 않는다. 설정 검증이 0 Hz 를 막지만, 1 GHz 를 넘는
+    // 설정은 나눗셈 결과가 0 ns 가 될 수 있어 여기서 한 번 더 막는다.
+    let step = |p: Duration| p.max(Duration::from_nanos(1));
+    let end = Instant::ZERO + until;
+    let (mut next_sup, mut next_arb) = (Instant::ZERO, Instant::ZERO);
+    loop {
+        let now = workers
+            .iter()
+            .map(|w| w.2)
+            .chain([next_sup, next_arb])
+            .min()
+            .unwrap_or(end);
+        if now > end {
+            break;
+        }
+        for (index, (worker, out, next)) in workers.iter_mut().enumerate() {
+            if *next == now {
+                worker.tick(now, &health, out);
+                health.record_group_tick(index, now, now, now, worker.period());
+                *next = now + step(worker.period());
+            }
+        }
+        if next_sup == now {
+            health.scan(now, group_stale_after);
+            next_sup = now + step(supervisor_period);
+        }
+        if next_arb == now {
+            arbiter.tick(now, health.availability());
+            next_arb = now + step(arbiter_period);
+        }
+    }
+    health
 }
 
 /// 그룹 스레드를 띄운다. 스레드가 `rt_priority`를 자기 자신에게 건 결과를 받은 뒤에 돌아온다.

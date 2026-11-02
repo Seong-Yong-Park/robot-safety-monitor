@@ -39,7 +39,7 @@ rsm-cli  ──▶  rsm-modules  ──▶  rsm-core
 |---|---|
 | `rsm-core` | 트레이트·타입·레지스트리·설정 로더·스케줄러·Supervisor. **미들웨어 비의존** |
 | `rsm-modules` | 레퍼런스 감지 모듈. 새 모듈은 `register_all`에 한 줄 추가 |
-| `rsm-cli` | `rsm run｜check｜list`. JSONL 출력 |
+| `rsm-cli` | `rsm run｜replay｜check｜list` |
 | `rsm-alloc-check` | **시험 전용.** 계측용 전역 할당자로 fast tick 경로 할당 0(R-08)을 검증. 배포 안 함, 다른 크레이트의 `[dependencies]`에 넣지 않는다 |
 
 파이프라인: `Source → Detector → Arbiter → Sink` + `Supervisor` + 주입된 `Clock`.
@@ -54,6 +54,8 @@ rsm-cli  ──▶  rsm-modules  ──▶  rsm-core
   `rsm-alloc-check`의 `GlobalAlloc` 구현 하나뿐이다.
 - tick 경로를 바꾸면 `cargo test -p rsm-alloc-check`가 할당 0을 확인한다. 실패 메시지에
   몇 번째 tick에서 몇 번 할당했는지 나온다.
+- 리플레이 스냅샷(`rsm-modules/tests/snapshots/`)이 바뀌면 **diff를 읽고 의도한 변화일 때만**
+  `INSTA_UPDATE=always cargo test -p rsm-modules --test replay`로 갱신한다. 읽지 않고 갱신하면 시험이 무의미하다.
 - 지터(시작 지연 P50/P99)는 `tools/jitter.sh`로 잰다(Linux 전용, 부하 없음 / CPU 부하 각 3회).
   `-p 80`이면 SCHED_FIFO로 잰다(root 필요). WSL2 수치는 참고용이다.
 - 라이브러리 크레이트에서 `unwrap()` / `expect()` / `panic!()` 금지.
@@ -72,7 +74,7 @@ rsm-cli  ──▶  rsm-modules  ──▶  rsm-core
 ```bash
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings   # 경고 0 이어야 한다
-cargo test --workspace                                   # 현재 91개
+cargo test --workspace                                   # 현재 100개
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items  # 깨진 문서 링크 0
 # unsafe·tick 경로를 건드렸으면 (nightly, 수 분 걸림):
 cargo +nightly miri test -p rsm-alloc-check
@@ -87,6 +89,7 @@ cargo run -q -p rsm-cli --bin rsm -- check --config examples/demo-a.yaml
 ```bash
 cargo run --release -p rsm-cli --bin rsm -- run --config examples/demo-a.yaml --duration-ms 2000
 cargo run --release -p rsm-cli --bin rsm -- run --config examples/demo-b.yaml --duration-ms 3000
+cargo run --release -p rsm-cli --bin rsm -- replay --config examples/replay-a.yaml --duration-ms 1500
 ```
 
 `demo-b`는 일부러 통신 두절과 패닉을 일으킨다. 패닉 메시지가 찍히지만 프로세스가

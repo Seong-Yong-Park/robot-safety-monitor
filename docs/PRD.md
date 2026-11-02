@@ -102,7 +102,7 @@ RSM은 **위험 감지 모듈을 표준 인터페이스로 규격화**하고, **
 | `rsm-ml` | 사전학습 모델 래퍼 Detector + 추론 런타임 바인딩 | `rsm-core` (feature flag로 선택 빌드) |
 | `rsm-ros2` | rclrs 기반 Source/Sink 어댑터, `rsm_msgs` 정의, 노드 실행 파일, ROS 시계 → `Clock` 구현 | `rsm-core`, `rsm-modules`, rclrs |
 | `rsm-tools` (Python) | 설정 검증, 리플레이 실행·비교, 결과 리포트 | CLI 경유 |
-| `rsm-cli` | 실행 파일 `rsm` — `run` / `check` / `list` 서브커맨드, JSONL Sink. 이후 `replay`가 여기 붙는다 | `rsm-core`, `rsm-modules`, `ctrlc`(Ctrl-C, TECH_STACK T10) |
+| `rsm-cli` | 실행 파일 `rsm` — `run` / `replay` / `check` / `list` 서브커맨드 | `rsm-core`, `rsm-modules`, `ctrlc`(Ctrl-C, TECH_STACK T10) |
 | `rsm-alloc-check` | **시험 전용**(배포 안 함). 계측용 전역 할당자로 `fast` tick 경로의 힙 할당 0(R-08)을 검증한다. 워크스페이스에서 `unsafe`가 있는 유일한 곳 (TECH_STACK T9) | 시험에서만 `rsm-core`, `rsm-modules` |
 | `rsm-vision` | Outside-in: 별도 프로세스의 인지 결과 수신 Source, 인지 건전성 Detector, 참조 인지 구현 (`docs/PRD-OUTSIDE-IN.md`) | `rsm-core` |
 | `rsm-command` | Outside-in: `SafetyState`와 권고 액션(R-18)을 내보내는 Sink. 명령은 발행하지 않는다 | `rsm-core` |

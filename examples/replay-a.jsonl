@@ -1,0 +1,44 @@
+# replay-a — 손으로 쓴 1.5 초짜리 시나리오. replay-a.yaml 이 읽는다.
+#
+#   0 ~ 400 ms  정상. 토크 40, 장애물 2.0 m, 바퀴 속도 0.5 m/s 를 100 ms 마다 보고
+#   500 ms      토크가 한계(100)를 넘는다            → threshold CRITICAL
+#   600 ms      장애물이 경고 거리(1.0 m) 안으로      → min_distance WARNING
+#   700 ms      장애물이 치명 거리(0.4 m) 안으로      → min_distance CRITICAL
+#   800 ms      바퀴 속도의 마지막 보고. 이후 끊김     → 100 ms 뒤 comm_timeout CRITICAL
+#   900 ms ~    토크·거리는 정상으로 돌아온다
+#
+# 한 줄에 표본 하나: t_ms(재생 시작부터, ms), signal, value.
+{"t_ms": 0,    "signal": "joint.torque",      "value": 40.0}
+{"t_ms": 0,    "signal": "obstacle.distance", "value": 2.0}
+{"t_ms": 0,    "signal": "wheel.speed",       "value": 0.5}
+{"t_ms": 100,  "signal": "joint.torque",      "value": 40.0}
+{"t_ms": 100,  "signal": "obstacle.distance", "value": 2.0}
+{"t_ms": 100,  "signal": "wheel.speed",       "value": 0.5}
+{"t_ms": 200,  "signal": "joint.torque",      "value": 42.0}
+{"t_ms": 200,  "signal": "obstacle.distance", "value": 1.9}
+{"t_ms": 200,  "signal": "wheel.speed",       "value": 0.5}
+{"t_ms": 300,  "signal": "joint.torque",      "value": 45.0}
+{"t_ms": 300,  "signal": "obstacle.distance", "value": 1.8}
+{"t_ms": 300,  "signal": "wheel.speed",       "value": 0.5}
+{"t_ms": 400,  "signal": "joint.torque",      "value": 60.0}
+{"t_ms": 400,  "signal": "obstacle.distance", "value": 1.6}
+{"t_ms": 400,  "signal": "wheel.speed",       "value": 0.5}
+# 토크 초과
+{"t_ms": 500,  "signal": "joint.torque",      "value": 110.0}
+{"t_ms": 500,  "signal": "obstacle.distance", "value": 1.4}
+{"t_ms": 500,  "signal": "wheel.speed",       "value": 0.5}
+# 토크는 돌아오고, 장애물이 다가온다
+{"t_ms": 600,  "signal": "joint.torque",      "value": 70.0}
+{"t_ms": 600,  "signal": "obstacle.distance", "value": 0.9}
+{"t_ms": 600,  "signal": "wheel.speed",       "value": 0.4}
+{"t_ms": 700,  "signal": "joint.torque",      "value": 50.0}
+{"t_ms": 700,  "signal": "obstacle.distance", "value": 0.3}
+{"t_ms": 700,  "signal": "wheel.speed",       "value": 0.1}
+# 바퀴 속도의 마지막 보고. 장애물은 물러난다
+{"t_ms": 800,  "signal": "joint.torque",      "value": 40.0}
+{"t_ms": 800,  "signal": "obstacle.distance", "value": 1.5}
+{"t_ms": 800,  "signal": "wheel.speed",       "value": 0.0}
+{"t_ms": 900,  "signal": "joint.torque",      "value": 40.0}
+{"t_ms": 900,  "signal": "obstacle.distance", "value": 2.0}
+{"t_ms": 1000, "signal": "joint.torque",      "value": 40.0}
+{"t_ms": 1000, "signal": "obstacle.distance", "value": 2.0}

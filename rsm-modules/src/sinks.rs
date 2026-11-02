@@ -1,6 +1,7 @@
-//! JSONL 출력 어댑터 (R-13).
+//! 출력 Sink — JSON Lines (PRD R-09 "Sink: JSON Lines, stdout").
 //!
-//! 한 줄에 상태 스냅샷 하나. `jq`로 바로 걸러 볼 수 있고, 리플레이 입력으로도 쓴다.
+//! 한 줄에 상태 스냅샷 하나. `jq`로 바로 걸러 볼 수 있다. 리플레이의 기대 결과(스냅샷
+//! 시험)도 이 형식 그대로다 — 키는 이름순으로 나와 줄마다 모양이 같다.
 //!
 //! 여기가 **정수 ID가 다시 문자열이 되는 유일한 지점**이다. tick 경로는 끝까지
 //! `u16`만 들고 다니고, 이름표([`Names`])는 출력 직전에만 펼친다 (R-08).
@@ -39,9 +40,14 @@ impl JsonlSink {
                     .open(path)?,
             )
         };
-        Ok(Self {
+        Ok(Self::to_writer(w))
+    }
+
+    /// 아무 출력에나 쓴다. 시험에서 결과를 메모리에 모을 때 쓴다.
+    pub fn to_writer(w: Box<dyn Write + Send>) -> Self {
+        Self {
             out: BufWriter::new(w),
-        })
+        }
     }
 }
 

@@ -36,7 +36,7 @@
 | D25 | 데드라인 미스는 **scan 구간 판정으로 `Degraded`.** 직전 scan 이후 새 미스가 있으면 `Degraded`, 깨끗한 구간 하나면 회복. `Unavailable`이 아니다. 오버플로도 같은 규칙(D26) |
 | D26 | 큐 오버플로도 **scan 구간 판정으로 회복**(Q-1 해소). 누적 횟수는 통계에 남고, `Degraded` 구간은 JSONL에 남는다(그래서 Arbiter Hz ≥ Supervisor Hz를 설정 검증으로 강제). 모듈 `Faulted`는 sticky 유지 |
 | D27 | 권고 액션(R-18) = **고정 enum + Arbiter 심각도→권고 매핑(설정) + 감시 불가 시 권고 설정 필수**. 절이 없으면 기능 꺼짐. 값 = `none` / `slow_down` / `stop`(의도만 정의, 크기·방식은 제어기), 심각도가 오를수록 약해지는 매핑은 거부 |
-| D28 | JSONL 리플레이 v0.5 범위 = **재생만**(리플레이 Source + `rsm replay` + `insta` 스냅샷). 기록 기능은 그 뒤 |
+| D28 | JSONL 리플레이 v0.5 범위 = **재생만**(리플레이 Source + `rsm replay` + `insta` 스냅샷). 기록 기능은 그 뒤. **구현됨** (2026-11-02) |
 
 ## Outside-In 결정 (`PRD-OUTSIDE-IN.md` §7)
 

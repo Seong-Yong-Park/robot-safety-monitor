@@ -291,6 +291,13 @@ Isaac Sim은 v1 대상에서 제외하되, 후속에 ML 감지기를 본격적�
 
 크레이트 구성 갱신: `rsm-core` / `rsm-modules` / `rsm-ml` / `rsm-mcap`(선택) / `rsm-ros2` / `rsm-sys`(unsafe 격리, 필요 시) / `rsm-tools`(Python).
 
+**v0.5 구현 (2026-11-02, PRD D28).** 한 줄에 표본 하나: `{"t_ms": 500, "signal": "joint.torque", "value": 110.0}`.
+- `t_ms`는 재생 시작(첫 tick)부터의 ms, 소수 허용, **줄 순서대로 같거나 커야** 한다. `value`는 숫자 → 스칼라, `true`/`false` → 불리언, 숫자 배열 → 벡터(최대 32개).
+- 빈 줄과 `#` 줄은 주석으로 건너뛴다 — 손으로 쓰는 시나리오에 설명을 달기 위해서다(엄밀한 JSONL은 아니다). 모르는 키는 기동 실패다. 오류에는 파일:줄 번호가 붙는다.
+- 읽는 쪽은 `rsm-modules`의 `type: replay` Source다. 파일은 `configure` 때 통째로 읽고 `poll`은 커서만 옮긴다(R-08). 상대 경로는 **설정 파일 기준**이다(`ModuleCtx::resolve_path`).
+- 재생 시각은 `rsm-core`의 `schedule::replay`가 정한다 — 스레드 없이 가상 시각으로 그룹 → Supervisor → Arbiter 순서를 고정해 돌린다. 그래서 결과가 실행 속도와 무관하게 바이트 단위로 같다.
+- **아직 없는 것**: 대용량 신호의 파일 참조(`"ref"`), 실행 중 기록(D28에서 v0.5 이후로 미룸).
+
 ---
 
 ## T15. CI/CD · 크로스 빌드
@@ -379,7 +386,7 @@ robot-safety-monitor/
 | T11 | ML 런타임 | **ONNX + `ort`**, CPU 시작·CUDA feature, `ort-tract` 대체 여지. **모델 라이선스 검토 필수(AGPL 회피)** |
 | T12 | ROS 2 | **Jazzy Jalisco** (EOL 2029-05, Ubuntu 24.04). rclrs 수동 설치, Gazebo Harmonic 페어링 |
 | T13 | 시뮬레이터 | **Gazebo Harmonic**, 검증 순서 **(b) 이동로봇 → (a) 매니퓰레이터**, (c)는 P1 이후 |
-| T14 | 리플레이 포맷 | **코어는 JSONL**(대용량은 파일 참조), **MCAP은 `rsm-mcap` Source로 격리**, 변환기는 `rsm-tools` |
+| T14 | 리플레이 포맷 | **코어는 JSONL**(대용량은 파일 참조), **MCAP은 `rsm-mcap` Source로 격리**, 변환기는 `rsm-tools`. v0.5: `t_ms`·`signal`·`value`, `#` 주석 허용, 가상 시각 재생 |
 | T15 | CI | **GitHub Actions** 5개 잡(코어·deny·커버리지·주기 무거운 검사·Phase 3 ROS), `cross`로 aarch64(단 `rsm-ml` 제외) |
 | T16 | 문서·구조 | **rustdoc + doctest**, 가이드는 `docs/*.md`로 시작하고 **mdBook은 Phase 2**, ADR 분리는 필요 시, 단일 리포 |
 

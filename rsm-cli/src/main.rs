@@ -7,14 +7,17 @@
 //! rsm check --config examples/demo-a.yaml    # 설정만 검증하고 끝
 //! rsm run   --config examples/demo-a.yaml    # Ctrl-C 로 멈출 때까지
 //! rsm run   --config examples/demo-a.yaml --duration-ms 2000
+//! rsm replay --config examples/replay-a.yaml --duration-ms 1500   # 가상 시각, 즉시 끝남
 //! rsm list                                   # 등록된 모듈 이름
 //! ```
 //!
 //! Ctrl-C 는 `ctrlc` 크레이트가 받는다. 시그널 핸들러에는 `unsafe`가 필요한데, 그 일을
 //! 이 크레이트에 맡기고 코어는 [`Runtime::stop`](rsm_core::schedule::Runtime::stop)만
 //! 부른다. 의존성은 실행 파일에만 있다 (TECH_STACK T10).
-
-mod jsonl;
+//!
+//! `replay`는 같은 설정을 벽시계 대신 가상 시각으로 돌린다
+//! ([`schedule::replay`]). 입력은 설정 안의 `type: replay`
+//! Source가 읽는 파일이다. 같은 입력이면 출력이 바이트 단위로 같다 (R-10).
 
 use std::fmt::Write as _;
 use std::io::{ErrorKind, Write};
@@ -27,15 +30,15 @@ use rsm_core::config::PipelineConfig;
 use rsm_core::registry::Registry;
 use rsm_core::schedule;
 use rsm_core::time::MonotonicClock;
-
-use crate::jsonl::JsonlSink;
+use rsm_modules::sinks::JsonlSink;
 
 const USAGE: &str = "\
 rsm — Robot Safety Monitor
 
 USAGE:
-  rsm run   --config <FILE> [--duration-ms <MILLIS>]   (runs until Ctrl-C if no duration)
-  rsm check --config <FILE>
+  rsm run    --config <FILE> [--duration-ms <MILLIS>]   (runs until Ctrl-C if no duration)
+  rsm replay --config <FILE> --duration-ms <MILLIS>     (virtual time, as fast as possible)
+  rsm check  --config <FILE>
   rsm list
 ";
 
@@ -165,6 +168,30 @@ fn cmd_run(path: &str, duration_ms: Option<u64>) -> Result<(), String> {
     Ok(())
 }
 
+/// 가상 시각으로 `duration_ms`까지 돌린다. 벽시계를 보지 않으므로 기다리지 않는다.
+fn cmd_replay(path: &str, duration_ms: u64) -> Result<(), String> {
+    let cfg = PipelineConfig::from_path(std::path::Path::new(path)).map_err(|e| e.to_string())?;
+    let built = cfg.build(&registry()).map_err(|e| e.to_string())?;
+    let sink = JsonlSink::open(&built.sink.path).map_err(|e| e.to_string())?;
+    let group_names: Vec<String> = built.groups.iter().map(|g| g.name.clone()).collect();
+
+    let health = schedule::replay(
+        built,
+        Box::new(MaxSeverity::new()),
+        Box::new(sink),
+        rsm_core::time::Duration::from_millis(duration_ms),
+    );
+    // 가상 시각이라 지연·작업 시간은 늘 0 이다. tick 수와 유실만 보인다.
+    for (i, name) in group_names.iter().enumerate() {
+        let s = health.group_stats(i);
+        eprintln!(
+            "[rsm] replay {name} tick {} · overflow {} ({duration_ms} ms virtual)",
+            s.ticks, s.overflows
+        );
+    }
+    Ok(())
+}
+
 /// 1/1000 단위 정수를 소수 한 자리로 찍는다 (ns → µs, mHz → Hz).
 fn one_decimal(milli: u64) -> String {
     format!("{}.{}", milli / 1_000, milli % 1_000 / 100)
@@ -189,13 +216,18 @@ fn dispatch(argv: &[String]) -> Result<(), String> {
     };
     match sub.as_str() {
         "list" => cmd_list(),
-        "check" | "run" => {
+        "check" | "run" | "replay" => {
             let opts = parse_args(&argv[1..])?;
             let path = opts.config.ok_or("--config is required")?;
-            if sub == "check" {
-                cmd_check(&path)
-            } else {
-                cmd_run(&path, opts.duration_ms)
+            match sub.as_str() {
+                "check" => cmd_check(&path),
+                "run" => cmd_run(&path, opts.duration_ms),
+                // 재생은 끝을 정해야 한다. 파일이 끝난 뒤의 낡음·끊김도 결과의 일부다.
+                _ => cmd_replay(
+                    &path,
+                    opts.duration_ms
+                        .ok_or("replay requires --duration-ms (virtual time)")?,
+                ),
             }
         }
         "--help" | "-h" | "help" => print_out(USAGE),

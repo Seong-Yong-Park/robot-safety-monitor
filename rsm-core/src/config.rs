@@ -43,6 +43,10 @@ pub struct PipelineConfig {
     /// 권고 액션 매핑 (R-18, PRD D27). 없으면 권고는 늘 `none`이다.
     #[serde(default)]
     pub recommended_action: Option<RecommendedActionConfig>,
+    /// 설정 파일이 있는 디렉터리. 모듈 파라미터의 상대 경로를 이 기준으로 푼다.
+    /// [`from_path`](Self::from_path)가 채운다. YAML 에서 읽는 값이 아니다.
+    #[serde(skip)]
+    pub base_dir: Option<std::path::PathBuf>,
 }
 
 /// 종합 상태 → 권고 매핑 (R-18, PRD D27).
@@ -296,7 +300,9 @@ impl PipelineConfig {
     /// 파일을 못 열거나 YAML이 스키마와 맞지 않으면 [`ConfigError`].
     pub fn from_path(path: &Path) -> Result<Self, ConfigError> {
         let text = std::fs::read_to_string(path)?;
-        Self::from_str(&text)
+        let mut cfg = Self::from_str(&text)?;
+        cfg.base_dir = path.parent().map(Path::to_path_buf);
+        Ok(cfg)
     }
 
     /// 문자열에서 읽는다.
@@ -455,7 +461,8 @@ impl PipelineConfig {
 
             if let Some(mut src) = registry.make_source(&m.kind) {
                 {
-                    let mut ctx = ModuleCtx::new(id, m.name.clone(), &params, names);
+                    let mut ctx = ModuleCtx::new(id, m.name.clone(), &params, names)
+                        .with_base_dir(self.base_dir.as_deref());
                     src.configure(&mut ctx)?;
                 }
                 for sig in src.declares() {
@@ -476,7 +483,8 @@ impl PipelineConfig {
                 entry.0.push((id, src));
             } else if let Some(mut det) = registry.make_detector(&m.kind) {
                 {
-                    let mut ctx = ModuleCtx::new(id, m.name.clone(), &params, names);
+                    let mut ctx = ModuleCtx::new(id, m.name.clone(), &params, names)
+                        .with_base_dir(self.base_dir.as_deref());
                     det.configure(&mut ctx)?;
                 }
                 for sig in det.requires() {

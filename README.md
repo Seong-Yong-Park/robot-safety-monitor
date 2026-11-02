@@ -21,7 +21,11 @@
 cargo run -p rsm-cli --bin rsm -- list
 cargo run -p rsm-cli --bin rsm -- check --config examples/demo-a.yaml
 cargo run --release -p rsm-cli --bin rsm -- run --config examples/demo-a.yaml --duration-ms 2000
+cargo run --release -p rsm-cli --bin rsm -- replay --config examples/replay-a.yaml --duration-ms 1500
 ```
+
+`replay`는 적어 둔 신호(`examples/replay-a.jsonl`, 한 줄에 `t_ms`·`signal`·`value`)를 가상 시각으로
+재생한다. 기다리지 않고 끝나며, 같은 입력이면 출력이 늘 같다 — 실기 없이 구성을 회귀 시험하는 방법이다.
 
 `demo-a.yaml`(팔, 2개 주기 그룹)과 `demo-b.yaml`(이동로봇, 고장 시연)은
 **같은 바이너리**가 읽는다. 조합이 달라져도 코드는 바뀌지 않는다.

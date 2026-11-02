@@ -31,9 +31,9 @@
 //! | [`traits`] | `Source` / `Detector` / `ArbiterPolicy` / `Sink` (R-01) | [`Detector`](traits::Detector) |
 //! | [`registry`] | 이름 → 팩토리 등록 (R-03) | [`Registry`](registry::Registry) |
 //! | [`config`] | YAML 선언 로드·검증·조립 (R-02) | [`PipelineConfig::build`](config::PipelineConfig::build) |
-//! | [`schedule`] | 주기 그룹·Arbiter·Supervisor 스레드 (R-03, R-18) | [`run`](schedule::run) |
+//! | [`schedule`] | 주기 그룹·Arbiter·Supervisor 스레드 (R-07, R-08) | [`run`](schedule::run) |
 //! | [`arbiter`] | max-severity + TTL 융합 정책 (R-05) | [`MaxSeverity`](arbiter::MaxSeverity) |
-//! | [`supervisor`] | 모듈·그룹 건강 감시, 가용성 판정 (R-06, R-16) | [`HealthRegistry`](supervisor::HealthRegistry) |
+//! | [`supervisor`] | 모듈·그룹 건강 감시, 가용성 판정 (R-06) | [`HealthRegistry`](supervisor::HealthRegistry) |
 //! | [`error`] | 설정·기동 오류 | [`ConfigError`](error::ConfigError) |
 
 pub mod arbiter;

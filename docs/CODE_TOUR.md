@@ -290,6 +290,7 @@ Supervisor는 "감시기가 못 보고 있다". 둘 다 있어야 침묵이 안�
 | 출력 필드·형식 | `rsm-cli/src/jsonl.rs` |
 | 주기가 밀린다 / 지터 | `rsm-core/src/schedule.rs`의 `group_loop` |
 | 이벤트가 새는 것 같다 | `QueueSink` 오버플로 + `queue_capacity` 설정 |
+| 리플레이 스냅샷 시험이 깨졌다 | `rsm-modules/tests/replay.rs` — diff가 곧 바뀐 동작이다. 입력은 `examples/replay-a.jsonl` |
 | `availability`가 이상하다 | `rsm-core/src/supervisor.rs`의 `scan` |
 | 프로세스가 통째로 죽었다 | `catch_unwind` 바깥 — `schedule.rs`, `main.rs` |
 | 테스트가 가끔 실패한다 | `time.rs` / 누가 OS 시계를 직접 부르는지 |

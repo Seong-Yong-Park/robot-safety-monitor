@@ -21,10 +21,10 @@ Linux에서 한다(아직 장비 없음).
 | 문서 | README·CONTRIBUTING·BRIEF·DECISIONS·이 문서 |
 | git | 로컬 저장소 + remote 연결. push 는 사용자가 한다 |
 | **rsm-core** | **완료** — 12개 모듈 전부 구현, 단위 테스트 62 + doctest 1 |
-| **rsm-modules** | **완료** — Source 3종 · Detector 4종, 단위 8 + 통합 13 |
-| **rsm-cli** | **완료** — `rsm run` / `rsm check` / `rsm list`, JSONL 출력. 그룹별 지터 요약, Ctrl-C 정지 |
+| **rsm-modules** | **완료** — Source 4종(리플레이 포함) · Detector 4종 · JSONL Sink, 단위 13 + 통합 17 (스냅샷 2) |
+| **rsm-cli** | **완료** — `rsm run` / `rsm replay` / `rsm check` / `rsm list`. 그룹별 지터 요약, Ctrl-C 정지 |
 | **rsm-alloc-check** | **완료** — 시험 전용 계측 할당자. 계측기 자체 시험 5 + fast 경로 시험 1 + doctest 1 |
-| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, rustdoc 링크 경고 0, 테스트 91 통과, fast tick 경로 할당 0 |
+| 검증 | `cargo clippy --workspace --all-targets -- -D warnings` 무경고, rustdoc 링크 경고 0, 테스트 100 통과, fast tick 경로 할당 0 |
 
 ### rsm-core 모듈
 
@@ -180,7 +180,7 @@ Windows에서 개발할 때는 `fast` 그룹 주기를 200 Hz 정도로 낮춰 �
 - [ ] **전용 Linux에서 지터 재측정** — G4 공식 수치. `tools/jitter.sh -p 80`. **장비 필요(사람)**
 - [x] Ctrl-C 처리 — `ctrlc`를 `rsm-cli`에만, `--duration-ms` 없으면 Ctrl-C까지 (TECH_STACK T10, 2026-11-02)
 - [x] Arbiter Hz ≥ Supervisor Hz 설정 검증 — `Degraded` 구간이 출력에서 빠지지 않게 (PRD D26, 2026-11-02)
-- [ ] **JSONL 리플레이** — v0.5 범위는 재생만: 리플레이 Source + `rsm replay` + `insta` 스냅샷 (PRD D28)
+- [x] **JSONL 리플레이** — `type: replay` Source + 가상 시각 `schedule::replay` + `rsm replay` + `insta` 스냅샷 2종, 10회 결정성 시험 (PRD D28, 2026-11-02). Detector 4종 전부 재생됨(R-10)
 - [x] **권고 액션 R-18** — `none` / `slow_down` / `stop`, 설정 `recommended_action` 절, JSONL `recommended_action` 필드 (PRD D27, 2026-11-02)
 - [ ] 메트릭 파사드 (T7)
 - [ ] `rsm-core` 공개 API 문서 정리 + mdBook (나중)

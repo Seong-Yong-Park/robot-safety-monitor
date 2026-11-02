@@ -14,12 +14,17 @@
 //! | `ramp` | 톱니파 신호를 만든다. 데모·시험용 Source |
 //! | `constant` | 고정값 신호를 만든다 |
 //! | `stalling` | N tick 뒤 갱신을 멈춘다. 통신 두절 재현용 |
+//! | `replay` | 파일에 적은 신호를 시각에 맞춰 다시 낸다 (R-10). [`replay`] 참고 |
 //! | `threshold` | 신호가 한계를 넘으면 이벤트 |
 //! | `min_distance` | 거리 신호가 가까워지면 2단계 이벤트 |
 //! | `comm_timeout` | 신호 갱신이 끊기면 이벤트 |
-//! | `panic_probe` | 일부러 패닉한다. 격리(R-18) 시연용 |
+//! | `panic_probe` | 일부러 패닉한다. 격리(R-07) 시연용 |
+//!
+//! 출력 Sink는 [`sinks::JsonlSink`] 하나다. 설정의 `sink:` 절이 고른다.
 
 pub mod detectors;
+pub mod replay;
+pub mod sinks;
 pub mod sources;
 
 use rsm_core::registry::Registry;
@@ -32,6 +37,7 @@ pub fn register_all(reg: &mut Registry) {
     reg.register_source("ramp", || Box::new(sources::Ramp::default()))
         .register_source("constant", || Box::new(sources::Constant::default()))
         .register_source("stalling", || Box::new(sources::Stalling::default()))
+        .register_source("replay", || Box::new(replay::Replay::default()))
         .register_detector("threshold", || Box::new(detectors::Threshold::default()))
         .register_detector("min_distance", || {
             Box::new(detectors::MinDistance::default())
