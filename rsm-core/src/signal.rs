@@ -1,7 +1,8 @@
 //! Source가 내고 Detector가 읽는 신호 (PRD §10).
 //!
 //! 고정된 enum이라 variant를 늘리면 `match`의 철저성 검사 덕분에 처리하지 않은
-//! 곳이 전부 빌드 에러로 드러난다. 확장이 필요하면 [`Signal::Custom`]을 쓴다.
+//! 곳이 전부 빌드 에러로 드러난다. 확장용 `Custom` variant는 이름만 예약했고 아직
+//! 없다 (PRD D22).
 //!
 //! [`SignalBus`]는 그룹 스레드 안에서만 쓰인다. 한 tick에서 Source를 먼저 돌리고
 //! Detector를 돌리므로 같은 스레드 안의 순차 접근이고, 락이 필요 없다.

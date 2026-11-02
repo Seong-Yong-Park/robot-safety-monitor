@@ -72,7 +72,8 @@ rsm-cli  ──▶  rsm-modules  ──▶  rsm-core
 ```bash
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings   # 경고 0 이어야 한다
-cargo test --workspace                                   # 현재 46개
+cargo test --workspace                                   # 현재 77개
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items  # 깨진 문서 링크 0
 cargo run -q -p rsm-cli --bin rsm -- check --config examples/demo-a.yaml
 ```
 
