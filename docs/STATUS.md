@@ -173,7 +173,7 @@ Windows에서 개발할 때는 `fast` 그룹 주기를 200 Hz 정도로 낮춰 �
       `Degraded`, 깨끗한 구간 하나면 회복 (PRD D25, 2026-11-02)
 - [ ] 큐 오버플로 `Degraded`의 회복 규칙 — 지금은 sticky. PRD §10 Q-1
 - [x] tick 경로 할당 0 계측 — `rsm-alloc-check` (2026-11-02)
-- [ ] Miri — `unsafe`가 처음 생겼으므로 TECH_STACK T9의 도입 시점이다. nightly 툴체인 필요
+- [x] Miri — `rsm-alloc-check` 전체 + `rsm-core` 단위 테스트, 검출 0 (2026-11-02, TECH_STACK T9)
 - [x] 지터 측정 하네스 — 고정 칸 히스토그램 + `tools/jitter.sh` (2026-11-02)
 - [x] 그룹 스레드 우선순위 — 그룹 설정 `rt_priority`(SCHED_FIFO), 못 얻으면 기동 실패 (2026-11-02)
 - [x] `timerfd`·spin 검토 — `timerfd`는 안 함, spin은 아래 재측정 뒤 결정 (TECH_STACK T5)

@@ -74,6 +74,9 @@ cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings   # 경고 0 이어야 한다
 cargo test --workspace                                   # 현재 82개
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items  # 깨진 문서 링크 0
+# unsafe·tick 경로를 건드렸으면 (nightly, 수 분 걸림):
+cargo +nightly miri test -p rsm-alloc-check
+cargo +nightly miri test -p rsm-core --lib
 cargo run -q -p rsm-cli --bin rsm -- check --config examples/demo-a.yaml
 ```
 

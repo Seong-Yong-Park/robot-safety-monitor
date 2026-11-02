@@ -183,6 +183,8 @@
 
 **할당 카운터의 위치 (2026-11-02).** `GlobalAlloc`은 `unsafe` 트레이트라 `forbid(unsafe_code)`인 기존 크레이트에 둘 수 없다. 시험 전용 크레이트 **`rsm-alloc-check`**(`publish = false`)를 따로 두고 `unsafe`는 그 안의 `impl` 하나로 한정한다(`undocumented_unsafe_blocks = "deny"`로 `// SAFETY:` 근거 강제). 외부 크레이트(`stats_alloc` 등)를 쓰지 않은 이유: 시험 하나 때문에 남의 `unsafe`와 라이선스 검사를 들이지 않는다. `rsm-sys`에 넣지 않은 이유: 그쪽은 런타임용 OS 래퍼 자리라 배포 크레이트에 시험용 할당자가 섞인다. 카운트는 스레드별(thread-local)이다 — `cargo test`가 시험을 병렬로 돌리기 때문이다.
 
+**Miri 도입 (2026-11-02).** `rsm-alloc-check`의 `GlobalAlloc` 구현이 워크스페이스의 첫 `unsafe`라 이 시점에 넣었다. 범위는 **`rsm-alloc-check` 전체 + `rsm-core` 단위 테스트**다. 코어 자체에는 `unsafe`가 없지만, 코어 테스트를 돌리면 의존 크레이트 `rtrb`(SPSC 링버퍼)의 `unsafe`와 원자 연산 사용이 같이 검사된다. `rsm-modules` 통합 테스트는 넣지 않는다 — 실제 스레드 기동 시험이 `pthread_setschedparam`(SCHED_FIFO)을 부르는데 Miri가 이 외부 호출을 흉내 내지 못한다. 툴체인은 고정 버전(1.98.1)과 별개로 `nightly`를 쓴다. 첫 실행은 둘 다 통과(검출 0), `rsm-alloc-check` 약 3분 30초·`rsm-core` 약 45초. CI에서는 위 원칙대로 주기 실행으로 분리한다.
+
 ---
 
 ## T10. 정적 분석 · 코딩 규칙 (PRD D18)
