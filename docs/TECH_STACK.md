@@ -94,6 +94,17 @@
 
 **결정.** **`std::thread` + `thread-priority` + `rtrb`.** 그룹당 OS 스레드 1개, 절대 시각 기준 `sleep_until` 루프(지터 부족 시 `timerfd`로 교체), **한 주기 이상 놓친 tick은 건너뛰고 위상(`t0 + k·period` 격자)은 유지**한다 — 밀린 tick을 몰아서 돌리지 않는다(2026-11-02, Phase 0 실측에서 위상을 "지금"으로 되맞추는 방식이 `sleep` 늦잠만큼 매 tick 주기를 늘린다는 것이 드러나 바꿨다), 그룹마다 SPSC 큐 1개를 두고 Arbiter가 순회 폴링. tokio 미사용. 오버플로 정책은 PRD D23 — 들어오는 이벤트를 버리고(`rtrb` push 실패) 원자 카운터에 기록, Supervisor가 `availability`를 `Degraded`로 낮춘다.
 
+**실시간 우선순위 적용 (2026-11-02).** 그룹 설정에 `rt_priority: 1..=99`를 두면 그 그룹 스레드만 Linux `SCHED_FIFO`로 돈다. 없으면 OS 기본(`SCHED_OTHER`). 세부 규칙:
+- **적용 못 하면 기동 실패.** 권한(root·`CAP_SYS_NICE`·rtprio 한도)이 없거나 Linux가 아니면 `ConfigError::Startup`으로 멈춘다. 우선순위 없이 조용히 돌면 설정이 전제한 주기 보장이 빠진 채 감시하는 셈이다 (R-02 "모호한 설정은 기동 실패"와 같은 원리). 이미 띄운 스레드는 거두고 끝낸다. 스레드 생성 실패도 같은 길로 바꿨다 — 전에는 조용히 무시했다.
+- **Arbiter·Supervisor는 일반 우선순위로 둔다.** 주기가 느리고(20 Hz·10 Hz) 지터에 민감하지 않다. RT 그룹이 폭주해도 Linux RT throttling(기본 95%)이 일반 스레드 몫을 남기므로 Supervisor가 스테일을 판정할 수 있다.
+- **의존성은 Linux 타깃에만** 건다(`[target.'cfg(target_os = "linux")'.dependencies]`). 다른 OS에서는 기능이 없으므로 빌드에 들어갈 이유가 없다.
+- 범위·0 Hz 같은 값 검사는 `rsm check` 단계(`build`)에서 하고, 권한·OS 검사는 `run` 단계에서 한다.
+
+**`timerfd`·바쁜 대기 검토 (2026-11-02, WSL2 실측, STATUS "지터 분포").** 결론: **`timerfd`는 하지 않는다. 바쁜 대기(spin)는 전용 Linux 측정 뒤 결정한다.**
+- `timerfd`도 `thread::sleep`(`nanosleep`)과 같은 커널 hrtimer로 깨어난다. 기대할 수 있는 차이는 timer slack(일반 스레드 기본 50 µs) 정도인데, `SCHED_FIFO` 스레드는 slack이 0이라 이미 없어졌다. 위상 유지는 `next_release`가 하고 있다.
+- 마지막 700 µs를 바쁜 대기로 바꿔 임시 실험하자 부하 없을 때 P99가 주기의 56% → 2~4%로 떨어져 목표를 맞췄다. 대가는 CPU 한 코어의 약 70%다. CPU 부하가 있을 때 꼬리(P99 2~4 ms)는 그대로였다 — 게스트 안 스케줄링이 아니라 그 밖(하이퍼바이저의 vCPU 배정)에서 생기는 것으로 추정한다.
+- 전용 Linux에서 `SCHED_FIFO`만으로 P99 ≤ 10%가 나오면 spin은 필요 없다. 안 나오면 그룹별 선택 설정으로 넣을지 그때 정한다(임베디드 타깃에서 코어 하나를 태우는 비용이 크다).
+
 ---
 
 ## T6. 시간 (Clock 트레이트 구현체)
@@ -353,7 +364,7 @@ robot-safety-monitor/
 | T2 | Rust 툴체인 | **stable + edition 2024**, `rust-toolchain.toml` 버전 고정, MSRV 문서화 |
 | T3 | 설정 포맷 | **YAML + `serde_yaml_ng` + `schemars`**, `deny_unknown_fields`, `serde_yml` 금지 |
 | T4 | 레지스트리 | **명시적 등록 함수**, 팩토리 `fn(&Params) -> Result<Box<dyn Detector>>` 고정 |
-| T5 | 스레드·큐 | **`std::thread` + `thread-priority` + `rtrb`**(전 구간 SPSC 정규화), tokio 미사용. 놓친 주기는 건너뛰고 위상 유지 |
+| T5 | 스레드·큐 | **`std::thread` + `thread-priority` + `rtrb`**(전 구간 SPSC 정규화), tokio 미사용. 놓친 주기는 건너뛰고 위상 유지. 그룹별 `rt_priority`(SCHED_FIFO), 적용 못 하면 기동 실패. `timerfd` 안 함, spin은 전용 Linux 측정 뒤 결정 |
 | T6 | 시간 | **자체 `Instant(u64 ns)` + `trait Clock`**, `MonotonicClock`·`VirtualClock`(v1), `RosClock`(Phase 3) |
 | T7 | 로깅·계측 | **3분리** — Sink `serde_json` / 진단 `tracing` / 계측 핫패스 고정 슬롯(원자 카운터 + 고정 칸 지연 히스토그램) → `metrics` |
 | T8 | 에러·패닉 | **`thiserror` + `anyhow` + unwind + 모듈 tick `catch_unwind` + 패닉 모듈 영구 `Faulted`** (재시작 정책은 P1 R-25) |

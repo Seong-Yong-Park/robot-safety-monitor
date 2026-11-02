@@ -12,6 +12,7 @@ version: 1
 groups:
   fast:                     # 관절 한계처럼 빨리 봐야 하는 것
     period_hz: 1000
+    # rt_priority: 80        # Linux SCHED_FIFO(1~99). root·CAP_SYS_NICE 필요, 못 얻으면 기동 실패
     queue_capacity: 256
   normal:                   # 거리·환경처럼 센서 주기가 느린 것
     period_hz: 100

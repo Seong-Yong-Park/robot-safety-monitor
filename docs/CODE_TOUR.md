@@ -195,7 +195,8 @@ for detector in detectors: detector.tick(now, &bus, out)
 > `schedule.rs`. `rsm run`이 끝날 때 stderr에 찍는 요약(`tick · Hz · miss ·
 > late · work · overflow`)이 첫 단서다. 설정 주파수와 `Hz`가 다르면 스케줄러,
 > `late`가 크면 OS, `work`가 크면 모듈을 의심한다. 분포를 여러 번, 부하를 걸고
-> 보려면 `tools/jitter.sh`.
+> 보려면 `tools/jitter.sh`. 부하 때 꼬리가 크면 그룹에 `rt_priority`(SCHED_FIFO)를
+> 준다 — 스레드가 자기 자신에게 거는 곳은 `spawn_group`, 실패는 기동 실패다.
 
 ---
 
